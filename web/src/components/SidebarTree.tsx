@@ -9,6 +9,7 @@ import {
   FilePlus2,
   Folder,
   FolderOpen,
+  Info,
   KeyRound,
   Layers,
   Loader2,
@@ -17,6 +18,7 @@ import {
   Search,
   Table2,
   Terminal,
+  TerminalSquare,
   Trash2,
   Unplug,
   X,
@@ -46,6 +48,8 @@ interface Props {
   onOpenTableData: (conn: ConnectionView, database: string, schema: string, table: string) => void;
   onDesignTable: (conn: ConnectionView, database: string, schema: string, table: string, mode: 'create' | 'alter') => void;
   onOpenQuery: (conn: ConnectionView, database: string, schema: string, initialSql?: string) => void;
+  onShowDetails?: () => void;
+  onOpenTerminal?: (conn: ConnectionView) => void;
   refreshSignal?: number;
 }
 
@@ -87,6 +91,8 @@ export const SidebarTree: React.FC<Props> = ({
   onOpenTableData,
   onDesignTable,
   onOpenQuery,
+  onShowDetails,
+  onOpenTerminal,
   refreshSignal = 0,
 }) => {
   const [expandedConns, setExpandedConns] = useState<Record<string, boolean>>({});
@@ -382,7 +388,11 @@ export const SidebarTree: React.FC<Props> = ({
                           ? 'bg-[#0a84ff] font-medium text-white shadow-sm'
                           : 'text-[#e8e8ee] hover:bg-white/[0.07]'
                       }`}
-                      title={`点击打开 ${obj.name} 数据表，右键更多操作`}
+                      title={
+                        obj.comment
+                          ? `${obj.name} — ${obj.comment}\n(点击打开数据表，右键更多操作)`
+                          : `点击打开 ${obj.name} 数据表，右键更多操作`
+                      }
                     >
                       <div className="flex min-w-0 flex-1 items-center gap-2">
                         <Table2
@@ -391,8 +401,35 @@ export const SidebarTree: React.FC<Props> = ({
                           }`}
                         />
                         <span className="truncate font-mono text-[13.5px] leading-snug">{obj.name}</span>
+                        {obj.comment && (
+                          <span
+                            className={`truncate text-[11px] ${
+                              isObjSelected ? 'text-white/80' : 'text-[#8e8e98]'
+                            }`}
+                          >
+                            {obj.comment}
+                          </span>
+                        )}
                       </div>
                       <div className="hidden items-center gap-0.5 group-hover:flex" onClick={(e) => e.stopPropagation()}>
+                        {onShowDetails && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onSelectContext({ connection: conn, database: dbName, schema: obj.schema || effectiveSch });
+                              onSelectObject(obj);
+                              onShowDetails();
+                            }}
+                            className={`rounded p-1 ${
+                              isObjSelected
+                                ? 'text-white/80 hover:bg-white/20 hover:text-white'
+                                : 'text-[#9e9ea9] hover:bg-white/[0.12] hover:text-white'
+                            }`}
+                            title="查看表注释与属性"
+                          >
+                            <Info className="h-3.5 w-3.5" />
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => onDesignTable(conn, dbName, obj.schema || effectiveSch, obj.name, 'alter')}
@@ -855,6 +892,20 @@ export const SidebarTree: React.FC<Props> = ({
                 <Terminal className="h-3.5 w-3.5 text-[#30d158]" />
                 新建 SQL 查询
               </button>
+              {onOpenTerminal && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const c = contextMenu.conn;
+                    setContextMenu(null);
+                    onOpenTerminal(c);
+                  }}
+                  className="flex w-full items-center gap-2 rounded-[6px] px-2.5 py-1.5 text-left hover:bg-[#0a84ff] hover:text-white"
+                >
+                  <TerminalSquare className="h-3.5 w-3.5 text-[#64d2ff]" />
+                  打开 SSH 终端 (Xshell)
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => {
@@ -913,6 +964,22 @@ export const SidebarTree: React.FC<Props> = ({
               <div className="border-b border-white/[0.08] px-2.5 py-1 font-mono font-medium text-[#9e9ea9] truncate">
                 {contextMenu.database}
               </div>
+              {onShowDetails && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const { conn, database: dbName } = contextMenu;
+                    setContextMenu(null);
+                    onSelectObject(null);
+                    onSelectContext({ connection: conn, database: dbName, schema: '' });
+                    onShowDetails();
+                  }}
+                  className="flex w-full items-center gap-2 rounded-[6px] px-2.5 py-1.5 text-left hover:bg-[#0a84ff] hover:text-white"
+                >
+                  <Info className="h-3.5 w-3.5 text-[#52a9ff]" />
+                  查看注释
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => {
@@ -1025,6 +1092,22 @@ export const SidebarTree: React.FC<Props> = ({
               <div className="border-b border-white/[0.08] px-2.5 py-1 font-mono font-medium text-[#9e9ea9] truncate">
                 {contextMenu.object.name}
               </div>
+              {onShowDetails && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const { conn, database: dbName, schema: sch, object: obj } = contextMenu;
+                    setContextMenu(null);
+                    onSelectContext({ connection: conn, database: dbName, schema: sch });
+                    onSelectObject(obj);
+                    onShowDetails();
+                  }}
+                  className="flex w-full items-center gap-2 rounded-[6px] px-2.5 py-1.5 text-left hover:bg-[#0a84ff] hover:text-white"
+                >
+                  <Info className="h-3.5 w-3.5 text-[#52a9ff]" />
+                  查看注释
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => {

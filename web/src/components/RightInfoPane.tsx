@@ -9,12 +9,14 @@ import {
   KeyRound,
   Layers,
   Loader2,
+  Save,
   Server,
   Table2,
   Terminal,
+  X,
 } from 'lucide-react';
-import { api } from '../api/client';
-import type { ConnectionView, DatabaseObject, EngineType, TableSchema } from '../types/db';
+import { api, ApiError } from '../api/client';
+import type { ConnectionView, DatabaseDetails, DatabaseObject, EngineType, TableSchema } from '../types/db';
 
 interface Props {
   connection: ConnectionView | null;
@@ -24,6 +26,7 @@ interface Props {
   onOpenTableData: (conn: ConnectionView, db: string, sch: string, table: string) => void;
   onDesignTable: (conn: ConnectionView, db: string, sch: string, table: string, mode: 'create' | 'alter') => void;
   onOpenQuery: (conn: ConnectionView, db: string, sch: string, initialSql?: string) => void;
+  onCommentUpdated?: () => void;
 }
 
 const ENGINE_NAMES: Record<EngineType, string> = {
@@ -43,19 +46,93 @@ export const RightInfoPane: React.FC<Props> = ({
   onOpenTableData,
   onDesignTable,
   onOpenQuery,
+  onCommentUpdated,
 }) => {
   const [activeTab, setActiveTab] = useState<'general' | 'columns' | 'ddl'>('general');
-  const [tableSchema, setTableSchema] = useState<TableSchema | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [tableDetails, setTableDetails] = useState<{ key: string; schema: TableSchema | null }>();
+  const [databaseDetails, setDatabaseDetails] = useState<{ key: string; database: DatabaseDetails | null }>();
   const [copied, setCopied] = useState(false);
+  const [editingTableComment, setEditingTableComment] = useState(false);
+  const [tableCommentDraft, setTableCommentDraft] = useState('');
+  const [savingTableComment, setSavingTableComment] = useState(false);
+  const [editingDbComment, setEditingDbComment] = useState(false);
+  const [dbCommentDraft, setDbCommentDraft] = useState('');
+  const [savingDbComment, setSavingDbComment] = useState(false);
+  const [commentError, setCommentError] = useState('');
+  const databaseKey = JSON.stringify([connection?.id, database]);
+  const tableKey = JSON.stringify([databaseKey, schema, selectedObject?.name, selectedObject?.schema]);
+  const tableSchema = tableDetails?.key === tableKey ? tableDetails.schema : null;
+  const databaseInfo = databaseDetails?.key === databaseKey ? databaseDetails.database : undefined;
+  const loading = Boolean(connection && selectedObject && tableDetails?.key !== tableKey);
+  const tableComment = tableSchema?.comment ?? selectedObject?.comment;
+  const canEditTableComment = Boolean(
+    connection &&
+      selectedObject &&
+      connection.engine !== 'sqlite' &&
+      !(connection.engine === 'mysql' && selectedObject.type === 'VIEW'),
+  );
+  const canEditDbComment = Boolean(connection && database && databaseInfo?.commentSupported);
+
+  const handleSaveTableComment = async () => {
+    if (!connection || !selectedObject) return;
+    setSavingTableComment(true);
+    setCommentError('');
+    try {
+      const res = await api.updateTableComment(connection.id, {
+        database,
+        schema: schema || selectedObject.schema || '',
+        table: selectedObject.name,
+        type: selectedObject.type,
+        comment: tableCommentDraft,
+      });
+      setTableDetails((prev) =>
+        prev && prev.key === tableKey && prev.schema
+          ? { key: tableKey, schema: { ...prev.schema, comment: res.comment } }
+          : prev,
+      );
+      setEditingTableComment(false);
+      onCommentUpdated?.();
+    } catch (err) {
+      setCommentError(err instanceof ApiError ? err.message : '保存表注释失败');
+    } finally {
+      setSavingTableComment(false);
+    }
+  };
+
+  const handleSaveDbComment = async () => {
+    if (!connection || !database) return;
+    setSavingDbComment(true);
+    setCommentError('');
+    try {
+      const res = await api.updateDatabaseComment(connection.id, database, dbCommentDraft);
+      setDatabaseDetails({ key: databaseKey, database: res.database });
+      setEditingDbComment(false);
+      onCommentUpdated?.();
+    } catch (err) {
+      setCommentError(err instanceof ApiError ? err.message : '保存数据库注释失败');
+    } finally {
+      setSavingDbComment(false);
+    }
+  };
 
   useEffect(() => {
-    if (!connection || !selectedObject) {
-      setTableSchema(null);
-      return;
-    }
+    if (!connection || !database) return;
     let cancelled = false;
-    setLoading(true);
+    api.describeDatabase(connection.id, database)
+      .then((res) => {
+        if (!cancelled) setDatabaseDetails({ key: databaseKey, database: res.database });
+      })
+      .catch(() => {
+        if (!cancelled) setDatabaseDetails({ key: databaseKey, database: null });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [databaseKey]);
+
+  useEffect(() => {
+    if (!connection || !selectedObject) return;
+    let cancelled = false;
     api
       .describeTable(
         connection.id,
@@ -65,24 +142,19 @@ export const RightInfoPane: React.FC<Props> = ({
       )
       .then((res) => {
         if (!cancelled) {
-          setTableSchema(res.schema);
+          setTableDetails({ key: tableKey, schema: res.schema });
         }
       })
       .catch(() => {
         if (!cancelled) {
-          setTableSchema(null);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setLoading(false);
+          setTableDetails({ key: tableKey, schema: null });
         }
       });
 
     return () => {
       cancelled = true;
     };
-  }, [connection?.id, database, schema, selectedObject?.name, selectedObject?.schema]);
+  }, [tableKey]);
 
   const handleCopyDDL = () => {
     if (!tableSchema?.ddl) return;
@@ -258,13 +330,80 @@ export const RightInfoPane: React.FC<Props> = ({
                       </div>
                     </>
                   )}
-                  {selectedObject.comment && (
-                    <div className="py-2">
-                      <dt className="mb-1 text-slate-400">表注释</dt>
-                      <dd className="rounded bg-slate-900 p-2 text-slate-300">{selectedObject.comment}</dd>
+                  <div className="py-2">
+                    <div className="mb-1 flex items-center justify-between">
+                      <dt className="text-slate-400">
+                        {selectedObject.type === 'TABLE' ? '表注释' : '视图注释'}
+                      </dt>
+                      {canEditTableComment && !editingTableComment && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTableCommentDraft(tableComment || '');
+                            setCommentError('');
+                            setEditingTableComment(true);
+                          }}
+                          className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-sky-400 hover:bg-slate-800"
+                        >
+                          <Edit3 className="h-3 w-3" />
+                          编辑
+                        </button>
+                      )}
                     </div>
-                  )}
+                    {editingTableComment ? (
+                      <div className="space-y-1.5">
+                        <textarea
+                          rows={2}
+                          value={tableCommentDraft}
+                          onChange={(e) => setTableCommentDraft(e.target.value)}
+                          placeholder="输入表或视图注释..."
+                          className="w-full resize-y rounded border border-slate-700 bg-slate-900 p-2 text-xs text-slate-100 outline-none focus:border-indigo-500"
+                        />
+                        <div className="flex justify-end gap-1.5">
+                          <button
+                            type="button"
+                            disabled={savingTableComment}
+                            onClick={() => setEditingTableComment(false)}
+                            className="inline-flex items-center gap-1 rounded border border-slate-700 px-2 py-1 text-[11px] text-slate-300 hover:bg-slate-800"
+                          >
+                            <X className="h-3 w-3" />
+                            取消
+                          </button>
+                          <button
+                            type="button"
+                            disabled={savingTableComment}
+                            onClick={() => void handleSaveTableComment()}
+                            className="inline-flex items-center gap-1 rounded bg-indigo-600 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+                          >
+                            {savingTableComment ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              <Save className="h-3 w-3" />
+                            )}
+                            保存
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <dd className="whitespace-pre-wrap break-words rounded bg-slate-900 p-2 text-slate-300">
+                        {tableComment ||
+                          (loading
+                            ? '正在读取注释…'
+                            : tableComment === ''
+                              ? '未设置注释'
+                              : connection.engine === 'sqlite'
+                                ? 'SQLite 没有表注释元数据'
+                                : '未读取到注释')}
+                      </dd>
+                    )}
+                  </div>
                 </dl>
+              </div>
+            )}
+
+            {commentError && (
+              <div className="rounded border border-rose-800 bg-rose-950/70 px-2.5 py-1.5 text-xs text-rose-200">
+                {commentError}
               </div>
             )}
 
@@ -307,6 +446,72 @@ export const RightInfoPane: React.FC<Props> = ({
                     {database || connection.database || '-'}
                   </dd>
                 </div>
+                {database && (
+                  <div className="py-2">
+                    <div className="mb-1 flex items-center justify-between">
+                      <dt className="text-slate-400">数据库注释</dt>
+                      {canEditDbComment && !editingDbComment && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDbCommentDraft(databaseInfo?.comment || '');
+                            setCommentError('');
+                            setEditingDbComment(true);
+                          }}
+                          className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-sky-400 hover:bg-slate-800"
+                        >
+                          <Edit3 className="h-3 w-3" />
+                          编辑
+                        </button>
+                      )}
+                    </div>
+                    {editingDbComment ? (
+                      <div className="space-y-1.5">
+                        <textarea
+                          rows={2}
+                          value={dbCommentDraft}
+                          onChange={(e) => setDbCommentDraft(e.target.value)}
+                          placeholder="输入数据库注释..."
+                          className="w-full resize-y rounded border border-slate-700 bg-slate-900 p-2 text-xs text-slate-100 outline-none focus:border-indigo-500"
+                        />
+                        <div className="flex justify-end gap-1.5">
+                          <button
+                            type="button"
+                            disabled={savingDbComment}
+                            onClick={() => setEditingDbComment(false)}
+                            className="inline-flex items-center gap-1 rounded border border-slate-700 px-2 py-1 text-[11px] text-slate-300 hover:bg-slate-800"
+                          >
+                            <X className="h-3 w-3" />
+                            取消
+                          </button>
+                          <button
+                            type="button"
+                            disabled={savingDbComment}
+                            onClick={() => void handleSaveDbComment()}
+                            className="inline-flex items-center gap-1 rounded bg-indigo-600 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+                          >
+                            {savingDbComment ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              <Save className="h-3 w-3" />
+                            )}
+                            保存
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <dd className="whitespace-pre-wrap break-words rounded bg-slate-900 p-2 text-slate-300">
+                        {databaseInfo === undefined
+                          ? '正在读取注释…'
+                          : databaseInfo === null
+                            ? '未读取到数据库注释'
+                            : databaseInfo.commentSupported
+                              ? databaseInfo.comment || '未设置注释'
+                              : '此数据库未提供库级注释元数据'}
+                      </dd>
+                    )}
+                  </div>
+                )}
                 {schema && (
                   <div className="flex justify-between py-2">
                     <dt className="text-slate-400">当前模式</dt>

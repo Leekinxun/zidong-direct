@@ -64,9 +64,9 @@ type ConnectionConfig struct {
 	Database       string     `json:"database"`
 	Username       string     `json:"username"`
 	Password       string     `json:"password,omitempty"`
-	SSLMode        string     `json:"sslMode,omitempty"`        // disable | require | verify-full (pg) | true/false (mysql/mssql)
+	SSLMode        string     `json:"sslMode,omitempty"` // disable | require | verify-full (pg) | true/false (mysql/mssql)
 	TrustServerCer bool       `json:"trustServerCert,omitempty"`
-	OracleMode     string     `json:"oracleMode,omitempty"`     // service | sid
+	OracleMode     string     `json:"oracleMode,omitempty"` // service | sid
 	SQLitePath     string     `json:"sqlitePath,omitempty"`
 	SSH            SSHConfig  `json:"ssh"`
 	Color          string     `json:"color,omitempty"`
@@ -153,6 +153,16 @@ type EngineCapabilities struct {
 	DataTypes           []string   `json:"dataTypes"`
 }
 
+type DatabaseInfo struct {
+	Name    string `json:"name"`
+	Comment string `json:"comment,omitempty"`
+}
+
+type SchemaInfo struct {
+	Name    string `json:"name"`
+	Comment string `json:"comment,omitempty"`
+}
+
 type DatabaseObject struct {
 	Name        string `json:"name"`
 	Type        string `json:"type"` // "TABLE" | "VIEW" | "MATERIALIZED VIEW"
@@ -160,6 +170,12 @@ type DatabaseObject struct {
 	RowEstimate *int64 `json:"rowEstimate,omitempty"`
 	Engine      string `json:"engine,omitempty"`
 	Comment     string `json:"comment,omitempty"`
+}
+
+type DatabaseDetails struct {
+	Name             string `json:"name"`
+	Comment          string `json:"comment,omitempty"`
+	CommentSupported bool   `json:"commentSupported"`
 }
 
 type ColumnDef struct {
@@ -197,6 +213,7 @@ type TableSchema struct {
 	Database    string          `json:"database"`
 	Schema      string          `json:"schema"`
 	Table       string          `json:"table"`
+	Comment     *string         `json:"comment,omitempty"`
 	Columns     []ColumnDef     `json:"columns"`
 	Indexes     []IndexDef      `json:"indexes"`
 	ForeignKeys []ForeignKeyDef `json:"foreignKeys"`

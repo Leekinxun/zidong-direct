@@ -59,13 +59,20 @@
   - 基于 CodeMirror 6：按引擎方言高亮，自动加载表名/列名智能补全。
   - 支持 `Ctrl+Enter` / `Cmd+Enter` 执行全篇或仅运行选中片段、分号拆批多语句执行、多结果集标签页展示与 SQL 执行历史本地记忆。
 - **可视化表结构设计器**
-  - 可视化配置字段名、数据类型建议、允许空、主键 (`PK`)、自增、默认值、PostgreSQL 生成列 (`GENERATED ALWAYS AS (...) STORED / VIRTUAL`)、注释、索引与外键。
-  - 支持「修改前先预览差异 DDL SQL」，按实际变更项精准生成 `ALTER COLUMN` 语句，确认无误后再提交执行。
-- **SSH 隧道代理**
+  - 可视化配置字段名、数据类型建议、允许空、主键 (`PK`)、自增、默认值、PostgreSQL 生成列 (`GENERATED ALWAYS AS (...) STORED / VIRTUAL`)、表注释、字段注释、索引与外键。
+  - **字段框自由拖拉宽度与长度**：既可拖拽字段列表表头分隔线调整列宽，也可直接拖动任意字段输入框（字段名、数据类型、默认值/生成列、字段注释）右下角调整宽度与高度。
+  - 支持「修改前先预览差异 DDL SQL」，按实际变更项精准生成 `ALTER COLUMN` 与表/字段注释语句，确认无误后再提交执行。
+- **表注释与数据库注释查看与编辑**
+  - 左侧导航树、对象总览（列表与网格卡片）、表结构设计器及右侧「注释与属性」面板均可直接查看**表注释 / 视图注释**与**数据库注释**，并支持在右侧属性面板及表设计器中直接在线编辑保存。
+- **内置 Xshell 交互式 SSH 终端与隧道代理**
   - 支持 SSH 密码认证与私钥认证（含私钥口令 Passphrase），支持 SHA256 主机指纹校验，断开连接或删除连接时自动清理隧道资源。
-- **数据导入与导出**
+  - 顶部工具栏与连接右键菜单内置 **SSH 终端 (Xshell 模式)**：既可直接复用已保存连接的 SSH 配置，也可在终端面板直接输入任意服务器 IP / 端口 / 账号密码直连操作终端；原生支持选中后按 **`Ctrl + Shift + C` 复制**、**`Ctrl + Shift + V` 粘贴**（含多行粘贴安全确认与 `Ctrl + C` 中断信号）。
+- **Navicat 全格式数据导入与导出向导**
   - **导出**：支持导出表数据（含当前筛选与排序）或任意 SQL 查询结果为 `CSV`（默认可带 UTF-8 BOM 防止 Win7 Excel 中文乱码）、`JSON` 或 `SQL INSERT` 脚本。
-  - **导入**：支持 `CSV` / `JSON` 批量写入表，支持上传 `.sql` 脚本文件并在事务中批量执行。
+  - **导入**：对齐 Navicat 全格式导入向导，支持 **本地文件上传**、**剪贴板直接粘贴文本（如从 Excel/WPS 复制表格粘贴）**、**公网 HTTP(S) URL** 与 **Windows ODBC 数据源**；支持 `CSV`、`TXT/定宽文本`、`TSV`、`Excel (.xlsx / .xlsm / .xls)`、`OpenDocument (.ods)`、`JSON`、`JSON Lines (.jsonl)`、`XML`、`HTML 网页表格 (.html)`、`dBASE (.dbf)`、`Apache Parquet (.parquet)`、`SQLite (.sqlite / .db)`、`Access (.mdb / .accdb)` 及 `.sql` 脚本；支持工作表/源表选择、字段映射（按名称/按顺序/手动）与 6 种写入模式（追加、更新、追加或更新、跳过匹配、删除匹配、清空后复制导入）。
+- **一键卸载与工作台清理重置**
+  - 网页右上角内置 **「卸载 / 清理」** 面板：支持在线一键清空连接配置、托管 SQLite 文件与浏览器本地缓存（恢复出厂状态），并提供跨平台卸载脚本命令。
+  - 项目根目录内置 [`./uninstall.sh`](./uninstall.sh)（Linux / macOS）与 [`.\uninstall.bat`](./uninstall.bat)（Windows），支持一键卸载容器与镜像（默认保留 `./data`，附加 `--purge-data` 连同数据彻底删除）。
 - **安全与权限控制**
   - 数据库密码、SSH 密码及 SSH 私钥使用 **AES-256-GCM** 加密后保存在持久化元数据目录；所有查询接口绝不回传明文秘钥。
   - 支持基于签名 Cookie 的工作台登录保护（通过环境变量一键开关）。
@@ -101,6 +108,22 @@ docker compose up -d --build
 | `MAX_QUERY_ROWS` | `1000` | 单次 SQL 查询允许返回的最大行数上限 |
 | `MAX_UPLOAD_BYTES` | `268435456` (256 MB) | SQLite / 导入文件上传大小上限（字节） |
 | `QUERY_TIMEOUT_SECONDS` | `60` | SQL 查询默认超时时间（秒） |
+
+#### 3. 卸载与清理数据
+
+- **网页端在线重置**：点击工作台右上角 **「卸载 / 清理」**，可在线清空已保存的连接凭据、托管 SQLite 文件及浏览器缓存。
+- **脚本一键卸载（Linux / macOS）**：
+  ```bash
+  # 卸载容器与镜像（保留 ./data 持久化数据目录）
+  ./uninstall.sh
+
+  # 彻底卸载（含容器、镜像及 ./data 全部数据）
+  ./uninstall.sh --purge-data --yes
+  ```
+- **Windows 脚本卸载**：
+  ```bat
+  .\uninstall.bat --purge-data
+  ```
 
 ### 💻 本地源码开发与运行
 
@@ -189,9 +212,11 @@ Its layout draws inspiration from classic desktop clients like Navicat paired wi
 
 - **Data Grid & Inline Transactions**: Click-to-sort columns, parameterized multi-condition filters, pagination, double-click inline cell editing, quick `(NULL)` toggle, insert/delete staging (`+ / - / ✓ / ✕`), and transactional commit.
 - **SQL Query Workbench**: CodeMirror 6 editor with engine-specific SQL dialect highlighting, table/column autocomplete, `Ctrl+Enter` / `Cmd+Enter` execution, selection-only execution, semicolon statement batching, multi-result tabs, and local query history.
-- **Visual Table Designer**: Create or alter tables (columns, type suggestions, PK, auto-increment, defaults, comments, indexes, foreign keys) with live diff DDL preview before execution.
-- **SSH Tunneling**: Password or private key authentication (with optional passphrase) and optional SHA256 host key fingerprint verification; automatic tunnel cleanup on disconnect/delete.
-- **Import & Export**: Export tables (respecting active filters/sorts) or SQL results to `CSV` (optional UTF-8 BOM for legacy Excel), `JSON`, or `SQL INSERT` scripts; bulk import `CSV` / `JSON` or execute `.sql` files inside a transaction.
+- **Visual Table Designer**: Create or alter tables (columns, type suggestions, PK, auto-increment, defaults, PG 12–18 generated columns, table & column comments, indexes, foreign keys) with live diff DDL preview and freely resizable column widths & field input box dimensions (both width and height).
+- **Table & Database Comments**: View and edit both table/view comments and database-level comments across the sidebar tree, object browser (list & grid views), table designer, and right-hand inspector pane.
+- **Built-in Xshell Interactive SSH Terminal & Tunneling**: Password or private key authentication (with optional passphrase) and SHA256 host key fingerprint verification; open an interactive Xshell-style SSH terminal for any saved connection or custom SSH host with `Ctrl + Shift + C` copy and `Ctrl + Shift + V` paste support.
+- **Navicat-Class Import & Export Wizard**: Export tables or SQL results to `CSV` (optional UTF-8 BOM), `JSON`, or `SQL INSERT` scripts; import from local files, clipboard paste, public HTTP(S) URLs, or Windows ODBC across `CSV`, `TXT/Fixed-Width`, `TSV`, `Excel (.xlsx/.xlsm/.xls)`, `ODS`, `JSON`, `JSONL`, `XML`, `HTML Table (.html)`, `dBASE (.dbf)`, `Parquet (.parquet)`, `SQLite (.sqlite/.db)`, `Access (.mdb/.accdb)`, and `.sql` scripts with column mapping and 6 write modes (`Append`, `Update`, `Upsert`, `Skip`, `Delete`, `Replace`).
+- **One-Click Uninstallation & Workspace Reset**: Reset connections, managed SQLite files, and browser cache directly from the in-app **Uninstall / Reset** dialog, or run [`./uninstall.sh`](./uninstall.sh) / [`.\uninstall.bat`](./uninstall.bat) (`--purge-data`) to remove containers, images, and persisted data.
 - **Security**: Stored database passwords and SSH private keys are encrypted at rest with **AES-256-GCM** and never returned in plaintext via API; optional signed-cookie authentication protects the workbench.
 
 ### 🚀 Quick Start with Docker

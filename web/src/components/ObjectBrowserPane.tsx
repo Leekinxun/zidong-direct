@@ -8,6 +8,7 @@ import {
   Eye,
   FilePlus2,
   FolderOpen,
+  Info,
   LayoutGrid,
   List,
   Loader2,
@@ -22,7 +23,7 @@ import {
   X,
 } from 'lucide-react';
 import { api, ApiError } from '../api/client';
-import type { ConnectionView, DatabaseObject, EngineCapabilities, EngineType } from '../types/db';
+import type { ConnectionView, DatabaseDetails, DatabaseObject, EngineCapabilities, EngineType } from '../types/db';
 import { BrandLogo } from './BrandLogo';
 import { ImportExportModal } from './ImportExportModal';
 
@@ -45,6 +46,7 @@ interface Props {
   onCategoryChange: (cat: ObjectCategory) => void;
   selectedObject: DatabaseObject | null;
   onSelectObject: (obj: DatabaseObject | null) => void;
+  onShowDetails?: () => void;
   onSelectDatabaseSchema: (conn: ConnectionView, db: string, sch: string) => void;
   onOpenTableData: (conn: ConnectionView, db: string, sch: string, table: string) => void;
   onDesignTable: (conn: ConnectionView, db: string, sch: string, table: string, mode: 'create' | 'alter') => void;
@@ -81,6 +83,7 @@ export const ObjectBrowserPane: React.FC<Props> = ({
   onCategoryChange,
   selectedObject,
   onSelectObject,
+  onShowDetails,
   onSelectDatabaseSchema,
   onOpenTableData,
   onDesignTable,
@@ -92,6 +95,7 @@ export const ObjectBrowserPane: React.FC<Props> = ({
   const [objects, setObjects] = useState<DatabaseObject[]>([]);
   const [databases, setDatabases] = useState<string[]>([]);
   const [schemas, setSchemas] = useState<string[]>([]);
+  const [dbDetails, setDbDetails] = useState<DatabaseDetails | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [actionNotice, setActionNotice] = useState('');
@@ -154,8 +158,17 @@ export const ObjectBrowserPane: React.FC<Props> = ({
           const stillExists = list.find((o) => o.name === selectedObject.name && o.type === selectedObject.type);
           onSelectObject(stillExists || null);
         }
+        if (targetDb) {
+          api
+            .describeDatabase(connection.id, targetDb)
+            .then((res) => setDbDetails(res.database))
+            .catch(() => setDbDetails(null));
+        } else {
+          setDbDetails(null);
+        }
       } else {
         setObjects([]);
+        setDbDetails(null);
       }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : '读取数据库对象失败');
@@ -529,10 +542,31 @@ export const ObjectBrowserPane: React.FC<Props> = ({
           </button>
         </div>
 
-        <div className="text-[11px] text-[#9e9ea9]">
-          当前位置：<span className="font-medium text-white">{connection.name}</span>
-          {database ? ` / ${database}` : ''}
-          {schema ? ` / ${schema}` : ''}
+        <div className="flex flex-wrap items-center gap-2 text-[11px] text-[#9e9ea9]">
+          <span>
+            当前位置：<span className="font-medium text-white">{connection.name}</span>
+            {database ? ` / ${database}` : ''}
+            {schema ? ` / ${schema}` : ''}
+          </span>
+          {dbDetails?.commentSupported && (
+            <span
+              className="max-w-xs truncate rounded bg-white/[0.06] px-2 py-0.5 text-[11px] text-[#d6d6de]"
+              title={dbDetails.comment || '当前数据库未设置注释'}
+            >
+              库注释：{dbDetails.comment || '未设置'}
+            </span>
+          )}
+          {onShowDetails && (
+            <button
+              type="button"
+              onClick={onShowDetails}
+              className="inline-flex items-center gap-1 rounded border border-white/[0.1] bg-white/[0.05] px-2 py-0.5 text-[11px] text-[#64d2ff] hover:bg-white/[0.1]"
+              title="打开右侧属性与注释面板"
+            >
+              <Info className="h-3 w-3" />
+              注释与属性
+            </button>
+          )}
         </div>
       </div>
 
@@ -771,6 +805,7 @@ export const ObjectBrowserPane: React.FC<Props> = ({
                         : isView
                         ? '视图'
                         : '数据表'}
+                      {obj.comment ? ` · ${obj.comment}` : ''}
                     </div>
                   </div>
                 </div>
@@ -793,6 +828,19 @@ export const ObjectBrowserPane: React.FC<Props> = ({
           <div className="border-b border-slate-800 px-3 py-1 font-mono text-[11px] font-semibold text-indigo-300 truncate">
             {contextMenu.object.name}
           </div>
+          {onShowDetails && (
+            <button
+              type="button"
+              onClick={() => {
+                setContextMenu(null);
+                onShowDetails();
+              }}
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-slate-800"
+            >
+              <Info className="h-3.5 w-3.5 text-indigo-300" />
+              查看注释
+            </button>
+          )}
           <button
             type="button"
             onClick={() => {

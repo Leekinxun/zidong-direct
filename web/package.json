@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build && node scripts/check-win7-compat.mjs",
+    "build:desktop": "tsc --noEmit && vite build --mode desktop && node scripts/check-win7-compat.mjs dist-desktop chrome108",
     "typecheck": "tsc --noEmit",
     "preview": "vite preview"
   },
@@ -17,6 +18,8 @@
     "@codemirror/state": "^6.4.1",
     "@codemirror/theme-one-dark": "^6.1.2",
     "@codemirror/view": "^6.35.0",
+    "@xterm/addon-fit": "0.10.0",
+    "@xterm/xterm": "5.5.0",
     "codemirror": "^6.0.1",
     "lucide-react": "^0.460.0",
     "react": "^18.3.1",

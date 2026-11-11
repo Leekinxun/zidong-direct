@@ -113,6 +113,13 @@ func BuildCreateTableStatements(d Dialect, ts TableSchema) ([]string, error) {
 	}
 
 	createSQL := fmt.Sprintf("CREATE TABLE %s (\n%s\n)", tableRef, strings.Join(defs, ",\n"))
+	if ts.Comment != nil && strings.TrimSpace(*ts.Comment) != "" {
+		if d.Engine() == EngineMySQL {
+			createSQL += fmt.Sprintf(" COMMENT='%s'", strings.ReplaceAll(*ts.Comment, "'", "''"))
+		} else if cStmt := BuildTableCommentStatement(d, ts.Database, ts.Schema, ts.Table, "TABLE", *ts.Comment); cStmt != "" {
+			postStatements = append([]string{cStmt}, postStatements...)
+		}
+	}
 	stmts := []string{createSQL}
 
 	for _, idx := range ts.Indexes {
@@ -352,6 +359,18 @@ func BuildDDLPreview(d Dialect, diff TableDesignDiff) (DDLPreviewResponse, error
 			}
 			stmts = append(stmts, fmt.Sprintf("CREATE %sINDEX %s ON %s (%s)",
 				uniq, d.QuoteIdent(tIdx.Name), tableRef, strings.Join(quoteList(d, tIdx.Columns), ", ")))
+		}
+	}
+
+	if target.Comment != nil {
+		origCmt := ""
+		if orig.Comment != nil {
+			origCmt = *orig.Comment
+		}
+		if strings.TrimSpace(origCmt) != strings.TrimSpace(*target.Comment) {
+			if cStmt := BuildTableCommentStatement(d, target.Database, target.Schema, curTableName, "TABLE", *target.Comment); cStmt != "" {
+				stmts = append(stmts, cStmt)
+			}
 		}
 	}
 

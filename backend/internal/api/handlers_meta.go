@@ -38,6 +38,95 @@ func (s *Server) handleListDatabases(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"databases": dbs})
 }
 
+func (s *Server) handleDescribeDatabase(w http.ResponseWriter, r *http.Request) {
+	connID := r.PathValue("id")
+	database := r.URL.Query().Get("database")
+	if database == "" {
+		writeError(w, http.StatusBadRequest, "bad_request", "database parameter is required")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), s.cfg.QueryTimeout)
+	defer cancel()
+
+	_, handle, dialect, err := s.acquireDB(ctx, connID, database)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "connect_failed", err.Error())
+		return
+	}
+	details, err := db.ReadDatabaseDetails(ctx, handle, dialect.Engine(), database)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "describe_failed", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"database": details})
+}
+
+func (s *Server) handleUpdateDatabaseComment(w http.ResponseWriter, r *http.Request) {
+	connID := r.PathValue("id")
+	var req struct {
+		Database string `json:"database"`
+		Comment  string `json:"comment"`
+	}
+	if !decodeJSONBody(w, r, 64*1024, &req) {
+		return
+	}
+	if req.Database == "" {
+		writeError(w, http.StatusBadRequest, "bad_request", "database is required")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), s.cfg.QueryTimeout)
+	defer cancel()
+
+	_, handle, dialect, err := s.acquireDB(ctx, connID, req.Database)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "connect_failed", err.Error())
+		return
+	}
+	if err := db.UpdateDatabaseComment(ctx, handle, dialect, req.Database, req.Comment); err != nil {
+		writeError(w, http.StatusBadRequest, "comment_update_failed", err.Error())
+		return
+	}
+	details, err := db.ReadDatabaseDetails(ctx, handle, dialect.Engine(), req.Database)
+	if err != nil {
+		details = db.DatabaseDetails{Name: req.Database, Comment: req.Comment, CommentSupported: true}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"database": details})
+}
+
+func (s *Server) handleUpdateTableComment(w http.ResponseWriter, r *http.Request) {
+	connID := r.PathValue("id")
+	var req struct {
+		Database string `json:"database"`
+		Schema   string `json:"schema"`
+		Table    string `json:"table"`
+		Type     string `json:"type"`
+		Comment  string `json:"comment"`
+	}
+	if !decodeJSONBody(w, r, 64*1024, &req) {
+		return
+	}
+	if req.Table == "" {
+		writeError(w, http.StatusBadRequest, "bad_request", "table is required")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), s.cfg.QueryTimeout)
+	defer cancel()
+
+	cfg, handle, dialect, err := s.acquireDB(ctx, connID, req.Database)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "connect_failed", err.Error())
+		return
+	}
+	if req.Database == "" {
+		req.Database = cfg.Database
+	}
+	if err := db.UpdateTableComment(ctx, handle, dialect, req.Database, req.Schema, req.Table, req.Type, req.Comment); err != nil {
+		writeError(w, http.StatusBadRequest, "comment_update_failed", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"comment": req.Comment})
+}
+
 func (s *Server) handleListSchemas(w http.ResponseWriter, r *http.Request) {
 	connID := r.PathValue("id")
 	database := r.URL.Query().Get("database")
@@ -107,6 +196,9 @@ func (s *Server) handleDescribeTable(w http.ResponseWriter, r *http.Request) {
 	}
 	if desc.DDL == "" && len(desc.Columns) > 0 {
 		desc.DDL = db.BuildCreateTableSQL(dialect, desc) + ";"
+	}
+	if comment, err := db.ReadTableComment(ctx, handle, dialect.Engine(), desc); err == nil {
+		desc.Comment = comment
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"schema": desc})
 }

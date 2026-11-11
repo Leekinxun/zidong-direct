@@ -12,6 +12,8 @@ import {
   Plus,
   Table2,
   Terminal,
+  TerminalSquare,
+  Trash2,
   Upload,
   Wrench,
   X,
@@ -27,6 +29,7 @@ import { RightInfoPane } from './components/RightInfoPane';
 import { SidebarTree, type SelectedTreeContext } from './components/SidebarTree';
 import { SqlWorkspace } from './components/SqlWorkspace';
 import { StructureDesigner } from './components/StructureDesigner';
+import { UninstallModal } from './components/UninstallModal';
 import type {
   ConnectionView,
   DatabaseObject,
@@ -36,6 +39,9 @@ import type {
 } from './types/db';
 
 const OBJECTS_TAB_ID = '__objects__';
+const TerminalWorkspace = React.lazy(() =>
+  import('./components/TerminalWorkspace').then(({ TerminalWorkspace }) => ({ default: TerminalWorkspace })),
+);
 
 const ENGINE_MENU_ITEMS: Array<{ engine: EngineType; label: string; badge: string }> = [
   { engine: 'mysql', label: 'MySQL / MariaDB', badge: '3306' },
@@ -70,8 +76,16 @@ export default function App() {
   const [initialModalEngine, setInitialModalEngine] = useState<EngineType | undefined>(undefined);
   const [editingConn, setEditingConn] = useState<ConnectionView | null>(null);
   const [showRightPane, setShowRightPane] = useState(false);
+  const [inspectorRevision, setInspectorRevision] = useState(0);
   const [refreshSignal, setRefreshSignal] = useState(0);
   const [globalIoModal, setGlobalIoModal] = useState<'import' | 'export' | null>(null);
+  const [terminalConnId, setTerminalConnId] = useState<string | null>(null);
+  const [uninstallModalOpen, setUninstallModalOpen] = useState(false);
+
+  const showObjectDetails = () => {
+    setInspectorRevision((revision) => revision + 1);
+    setShowRightPane(true);
+  };
 
   useEffect(() => {
     const close = () => setConnMenuOpen(false);
@@ -365,6 +379,17 @@ export default function App() {
             <span className="text-[12.5px] font-medium">新建查询</span>
           </button>
 
+          {/* 2.5 SSH 终端 (Xshell) */}
+          <button
+            type="button"
+            onClick={() => setTerminalConnId(selectedContext?.connection.id ?? '')}
+            className="apple-toolbar-btn"
+            title="打开 Xshell 交互式 SSH 终端 (支持 Ctrl+Shift+C/V 复制粘贴)"
+          >
+            <TerminalSquare className="h-5 w-5 text-[#64d2ff]" strokeWidth={1.8} />
+            <span className="text-[12.5px] font-medium">SSH 终端</span>
+          </button>
+
           <div className="mx-1.5 h-7 w-px bg-white/[0.08]" />
 
           {/* 3. 表总览 (Tables Overview - Only opens when explicitly clicked) */}
@@ -430,7 +455,7 @@ export default function App() {
               setGlobalIoModal('import');
             }}
             className="apple-toolbar-btn"
-            title="从 CSV / JSON / SQL 脚本导入数据"
+            title="打开全格式数据导入向导 (CSV / Excel / JSON / XML / HTML / DBF / Parquet / SQLite / SQL)"
           >
             <Upload className="h-5 w-5 text-[#5e5ce6]" strokeWidth={1.8} />
             <span className="text-[12.5px] font-medium">导入</span>
@@ -454,16 +479,26 @@ export default function App() {
           </button>
         </div>
 
-        {/* Right Side Controls: Info Pane Toggle + User */}
+        {/* Right Side Controls: Info Pane Toggle + Uninstall/Reset + User */}
         <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={() => setShowRightPane((v) => !v)}
             className={showRightPane ? 'apple-btn-primary' : 'apple-btn-secondary'}
-            title="显示/隐藏右侧属性与 DDL 检查器"
+            title="显示/隐藏右侧属性、注释与 DDL 检查器"
           >
             <PanelRight className="h-4 w-4" />
-            <span className="hidden sm:inline">属性与 DDL</span>
+            <span className="hidden sm:inline">注释与属性</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setUninstallModalOpen(true)}
+            className="apple-btn-secondary text-[#ff6961] hover:text-white"
+            title="卸载服务或清理重置工作台数据"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            <span className="hidden md:inline">卸载 / 清理</span>
           </button>
 
           {authEnabled && (
@@ -508,6 +543,8 @@ export default function App() {
           onOpenTableData={handleOpenTableData}
           onDesignTable={handleDesignTable}
           onOpenQuery={handleOpenQuery}
+          onShowDetails={showObjectDetails}
+          onOpenTerminal={(c) => setTerminalConnId(c.id)}
           refreshSignal={refreshSignal}
         />
 
@@ -634,6 +671,7 @@ export default function App() {
                       onNewConnection={(eng) => openNewConnectionModal(eng)}
                       refreshSignal={refreshSignal}
                       onObjectsChanged={() => setRefreshSignal((n) => n + 1)}
+                      onShowDetails={showObjectDetails}
                     />
                   </div>
                 )}
@@ -728,6 +766,7 @@ export default function App() {
         {/* Right Collapsible Property & DDL Inspector */}
         {showRightPane && (
           <RightInfoPane
+            key={inspectorRevision}
             connection={selectedContext?.connection || connections[0] || null}
             database={selectedContext?.database || ''}
             schema={selectedContext?.schema || ''}
@@ -735,6 +774,7 @@ export default function App() {
             onOpenTableData={handleOpenTableData}
             onDesignTable={handleDesignTable}
             onOpenQuery={handleOpenQuery}
+            onCommentUpdated={() => setRefreshSignal((n) => n + 1)}
           />
         )}
       </div>
@@ -813,6 +853,30 @@ export default function App() {
           table={selectedObject?.name || ''}
           onClose={() => setGlobalIoModal(null)}
           onImported={() => setRefreshSignal((n) => n + 1)}
+        />
+      )}
+
+      {terminalConnId !== null && (
+        <React.Suspense fallback={<div role="status" className="sr-only">正在加载 SSH 终端</div>}>
+          <TerminalWorkspace
+            connections={connections}
+            initialConnectionId={terminalConnId || selectedContext?.connection.id}
+            onClose={() => setTerminalConnId(null)}
+          />
+        </React.Suspense>
+      )}
+
+      {uninstallModalOpen && (
+        <UninstallModal
+          onClose={() => setUninstallModalOpen(false)}
+          onResetCompleted={() => {
+            setTabs([]);
+            setObjectsTabOpen(false);
+            setActiveTabId('');
+            setSelectedContext(null);
+            setSelectedObject(null);
+            void loadWorkspaceData();
+          }}
         />
       )}
     </div>

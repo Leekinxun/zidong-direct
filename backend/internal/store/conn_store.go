@@ -366,6 +366,20 @@ func (s *ConnectionStore) Delete(id string) error {
 	return nil
 }
 
+func (s *ConnectionStore) ClearAll() (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	count := len(s.connections)
+	backup := s.connections
+	s.connections = make(map[string]persistedConnection)
+	if err := s.saveLocked(); err != nil {
+		s.connections = backup
+		return 0, err
+	}
+	return count, nil
+}
+
 // ResolveRuntimeConfig converts a ConnectionInput into a complete ConnectionConfig,
 // reusing saved secrets when testing edits without re-entering passwords.
 func (s *ConnectionStore) ResolveRuntimeConfig(in db.ConnectionInput) (db.ConnectionConfig, error) {
