@@ -22,7 +22,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 
 # Stage 3: Minimal runtime image
 FROM alpine:3.20
-RUN apk add --no-cache ca-certificates tzdata wget \
+RUN apk add --no-cache ca-certificates tzdata wget su-exec \
   && addgroup -g 10001 webdb \
   && adduser -D -u 10001 -G webdb webdb \
   && mkdir -p /app/static /data/meta /data/sqlite \
@@ -31,9 +31,10 @@ RUN apk add --no-cache ca-certificates tzdata wget \
 WORKDIR /app
 COPY --from=backend-builder /out/webdb-studio /app/webdb-studio
 COPY --from=web-builder /src/web/dist /app/static
-RUN chown -R webdb:webdb /app /data
+COPY docker-entrypoint.sh /app/docker-entrypoint.sh
+RUN chmod 0755 /app/docker-entrypoint.sh \
+  && chown -R webdb:webdb /app /data
 
-USER webdb
 ENV PORT=8080 \
     DATA_DIR=/data \
     SQLITE_DIR=/data/sqlite \
@@ -43,6 +44,6 @@ EXPOSE 8080
 VOLUME ["/data"]
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD wget -qO- http://127.0.0.1:8080/api/health || exit 1
+  CMD wget -qO- "http://127.0.0.1:${PORT:-8080}/api/health" || exit 1
 
-ENTRYPOINT ["/app/webdb-studio"]
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
