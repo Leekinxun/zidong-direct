@@ -2,6 +2,7 @@ import type {
   AutocompleteTable,
   ConnectionInput,
   ConnectionView,
+  DatabaseDetails,
   DatabaseObject,
   DDLPreviewResponse,
   EngineCapabilities,
@@ -118,6 +119,10 @@ export const api = {
 
   listDatabases: (connId: string) =>
     requestJSON<{ databases: string[] }>(`/api/connections/${encodeURIComponent(connId)}/databases`),
+  describeDatabase: (connId: string, database: string) =>
+    requestJSON<{ database: DatabaseDetails }>(
+      `/api/connections/${encodeURIComponent(connId)}/database/describe?${new URLSearchParams({ database })}`,
+    ),
   listSchemas: (connId: string, database: string) =>
     requestJSON<{ schemas: string[] }>(
       `/api/connections/${encodeURIComponent(connId)}/schemas?database=${encodeURIComponent(database)}`,
@@ -245,35 +250,84 @@ export const api = {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   },
 
-  importData: async (params: {
-    connectionId: string;
-    database: string;
-    schema: string;
-    table?: string;
-    format: 'csv' | 'json' | 'sql';
-    file: File;
+  previewImportData: (params: ImportSourceParams) =>
+    submitImport<ImportPreview>(params, { preview: 'true' }),
+  importData: (params: ImportSourceParams & {
     emptyAsNull: boolean;
     continueOnError: boolean;
-  }) => {
-    const fd = new FormData();
-    fd.append('connectionId', params.connectionId);
-    fd.append('database', params.database);
-    fd.append('schema', params.schema);
-    if (params.table) fd.append('table', params.table);
-    fd.append('format', params.format);
-    fd.append('emptyAsNull', params.emptyAsNull ? 'true' : 'false');
-    fd.append('continueOnError', params.continueOnError ? 'true' : 'false');
-    fd.append('file', params.file);
-
-    const res = await fetch('/api/import', {
-      method: 'POST',
-      body: fd,
-      credentials: 'same-origin',
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      throw new ApiError(res.status, data.error || 'import_error', data.message || '导入失败');
-    }
-    return data as { insertedRows: number; failedRows?: number; errors?: string[]; statements?: number };
-  },
+    mode?: ImportWriteMode;
+    mappings?: { source: number; target: string }[];
+    confirmed?: boolean;
+    sourceDigest?: string;
+  }) => submitImport<ImportResult>(params, {
+    emptyAsNull: String(params.emptyAsNull),
+    continueOnError: String(params.continueOnError),
+    mode: params.mode ?? '',
+    mappings: params.mappings ? JSON.stringify(params.mappings) : '',
+    confirmed: String(Boolean(params.confirmed)),
+    sourceDigest: params.sourceDigest ?? '',
+  }),
 };
+
+
+export type ImportFormat = 'csv' | 'txt' | 'tsv' | 'json' | 'jsonl' | 'xml' | 'xlsx' | 'ods' | 'dbf' | 'xls' | 'parquet' | 'mdb' | 'accdb' | 'odbc' | 'sql';
+export type ImportWriteMode = 'append' | 'update' | 'upsert' | 'skip' | 'delete' | 'replace';
+
+export interface ImportSourceParams {
+  connectionId: string;
+  database: string;
+  schema: string;
+  table?: string;
+  format: ImportFormat;
+  file?: File;
+  sourceUrl?: string;
+  sourceDsn?: string;
+  sourceUser?: string;
+  sourcePassword?: string;
+  sourceTable?: string;
+  encoding?: string;
+  delimiter?: string;
+  widths?: string;
+  sheet?: string;
+  xmlRow?: string;
+  skipRows?: number;
+  noHeader?: boolean;
+}
+
+export interface ImportPreview {
+  columns: string[];
+  rows: unknown[][];
+  targetColumns: { name: string; primaryKey: boolean; generated?: boolean }[];
+  sheets?: string[];
+  sheet?: string;
+  sourceDigest?: string;
+}
+
+export interface ImportResult {
+  insertedRows: number;
+  updatedRows?: number;
+  deletedRows?: number;
+  skippedRows?: number;
+  failedRows?: number;
+  errors?: string[];
+  statements?: number;
+}
+
+async function submitImport<T>(params: ImportSourceParams, options: Record<string, string>): Promise<T> {
+  const fd = new FormData();
+  const { file, ...source } = params;
+  for (const [key, value] of Object.entries({ ...source, ...options })) {
+    if (value !== undefined && value !== '') fd.append(key, String(value));
+  }
+  if (file) fd.append('file', file);
+  const res = await fetch('/api/import', {
+    method: 'POST',
+    body: fd,
+    credentials: 'same-origin',
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new ApiError(res.status, data.error || 'import_error', data.message || '导入失败');
+  }
+  return data as T;
+}

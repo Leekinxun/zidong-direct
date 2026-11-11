@@ -61,11 +61,16 @@
 - **可视化表结构设计器**
   - 可视化配置字段名、数据类型建议、允许空、主键 (`PK`)、自增、默认值、PostgreSQL 生成列 (`GENERATED ALWAYS AS (...) STORED / VIRTUAL`)、注释、索引与外键。
   - 支持「修改前先预览差异 DDL SQL」，按实际变更项精准生成 `ALTER COLUMN` 语句，确认无误后再提交执行。
+  - 可拖动字段列表的列标题边缘调整宽度，并拖动长文本框右下角调整高度。
+  - 从数据库、表或视图的「查看注释」打开属性面板。数据库级注释支持 PostgreSQL、MariaDB 10.5+ 和配置了 `MS_Description` 的 SQL Server。
 - **SSH 隧道代理**
   - 支持 SSH 密码认证与私钥认证（含私钥口令 Passphrase），支持 SHA256 主机指纹校验，断开连接或删除连接时自动清理隧道资源。
+  - 桌面版可从「SSH 终端」选择启用了 SSH 的连接，打开交互式终端。选中内容后用 `Ctrl+Shift+C` 复制，用 `Ctrl+Shift+V` 粘贴。多行粘贴需要确认，`Ctrl+C` 向远端发送中断。
 - **数据导入与导出**
   - **导出**：支持导出表数据（含当前筛选与排序）或任意 SQL 查询结果为 `CSV`（默认可带 UTF-8 BOM 防止 Win7 Excel 中文乱码）、`JSON` 或 `SQL INSERT` 脚本。
-  - **导入**：支持 `CSV` / `JSON` 批量写入表，支持上传 `.sql` 脚本文件并在事务中批量执行。
+  - **导入**支持 CSV、TXT、TSV、定宽文本、JSON、JSON Lines、XML、Excel（XLS、XLSX、XLSM）、ODS、DBF、平面 Parquet 和本地 SQL 脚本。导入向导可预览字段、选择工作表，并按列名、位置或手动建立映射。
+  - 桌面版及启用登录的 Web 版可从公开 HTTP(S) 文件 URL 导入表数据，下载时限制文件大小并校验预览与导入的内容一致。Windows 桌面版也可从 ODBC DSN 或 Access（MDB、ACCDB）导入，需要安装与应用位数匹配的驱动。
+  - 导入向导每次处理一个来源和一张现有表，可追加、按主键更新、更新或追加、跳过匹配项、删除匹配项，或清空后导入。删除与清空模式会要求确认。
 - **安全与权限控制**
   - 数据库密码、SSH 密码及 SSH 私钥使用 **AES-256-GCM** 加密后保存在持久化元数据目录；所有查询接口绝不回传明文秘钥。
   - 支持基于签名 Cookie 的工作台登录保护（通过环境变量一键开关）。
@@ -149,6 +154,8 @@ npm run package:win7:x64 --prefix desktop
 安装程序位于 `desktop/dist/Zidong-Direct-Win7-<版本>-x64-Setup.exe`。附加 `-- --dir` 可生成用于调试的未安装目录。构建机已有其他 Go 版本时，可将 `ZIDONG_WIN7_GO` 指向 Go 1.20.14 的 `go.exe`。 [Windows 构建工作流](./.github/workflows/desktop-win7.yml)
 
 桌面连接和 SQLite 文件位于 `%APPDATA%\Zidong Direct\workspace\data`，偏好和查询历史位于同一 `workspace` 目录。卸载保留用户档案。新连接的主密钥由 Windows DPAPI 保护。升级前退出应用并备份 `workspace`，DPAPI 密钥恢复需使用原 Windows 用户档案。
+
+卸载时可从 Windows 开始菜单运行「卸载 紫东直连」，或在应用内选择「文件 → 打开卸载面板」后，在「程序和功能」选择紫东直连。
 
 迁移 Web/Docker 数据前，关闭源服务和桌面版，确认 SQLite 已完成 WAL 检查点，并保留源目录备份。将 `meta/connections.json`、`meta/.master.key` 和 `sqlite/` 复制到一个全新的桌面 `data` 目录。部署通过 `APP_SECRET_KEY` 提供主密钥时，将该环境变量原始字符串的 SHA-256 十六进制摘要写入复制档案的 `meta/.master.key`。桌面后端确认凭据可解密后才将复制的主密钥转换为 DPAPI。以普通用户登录目标机器后先验证连接与 SQLite 再切换使用。
 

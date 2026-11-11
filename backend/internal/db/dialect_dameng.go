@@ -102,13 +102,15 @@ func (d *damengDialect) ListObjects(ctx context.Context, conn *sql.DB, _, schema
 		_ = conn.QueryRowContext(ctx, "SELECT SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA') FROM DUAL").Scan(&schema)
 	}
 	q := `
-SELECT TABLE_NAME, 'TABLE'
-FROM ALL_TABLES
-WHERE OWNER = ?
+SELECT t.TABLE_NAME, 'TABLE', c.COMMENTS
+FROM ALL_TABLES t
+LEFT JOIN ALL_TAB_COMMENTS c ON c.OWNER = t.OWNER AND c.TABLE_NAME = t.TABLE_NAME
+WHERE t.OWNER = ?
 UNION ALL
-SELECT VIEW_NAME, 'VIEW'
-FROM ALL_VIEWS
-WHERE OWNER = ?
+SELECT v.VIEW_NAME, 'VIEW', c.COMMENTS
+FROM ALL_VIEWS v
+LEFT JOIN ALL_TAB_COMMENTS c ON c.OWNER = v.OWNER AND c.TABLE_NAME = v.VIEW_NAME
+WHERE v.OWNER = ?
 ORDER BY 2, 1`
 	rows, err := conn.QueryContext(ctx, q, schema, schema)
 	if err != nil {
@@ -118,13 +120,15 @@ ORDER BY 2, 1`
 	var out []DatabaseObject
 	for rows.Next() {
 		var name, objType string
-		if err := rows.Scan(&name, &objType); err != nil {
+		var comment sql.NullString
+		if err := rows.Scan(&name, &objType, &comment); err != nil {
 			return nil, err
 		}
 		out = append(out, DatabaseObject{
-			Name:   name,
-			Type:   objType,
-			Schema: schema,
+			Name:    name,
+			Type:    objType,
+			Schema:  schema,
+			Comment: comment.String,
 		})
 	}
 	return out, rows.Err()

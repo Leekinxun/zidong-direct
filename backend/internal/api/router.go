@@ -19,6 +19,7 @@ type Server struct {
 	pools     *db.PoolManager
 	auth      *AuthHandler
 	staticDir string
+	terminals terminalSessions
 }
 
 func NewServer(cfg config.Config, st *store.ConnectionStore, pools *db.PoolManager, cipher *crypto.Cipher, staticDir string) *Server {
@@ -55,6 +56,7 @@ func (s *Server) Handler() http.Handler {
 	routes.add("GET /api/sqlite/download", s.handleDownloadSQLiteFile)
 
 	routes.add("GET /api/connections/{id}/databases", s.handleListDatabases)
+	routes.add("GET /api/connections/{id}/database/describe", s.handleDescribeDatabase)
 	routes.add("GET /api/connections/{id}/schemas", s.handleListSchemas)
 	routes.add("GET /api/connections/{id}/objects", s.handleListObjects)
 	routes.add("GET /api/connections/{id}/table/describe", s.handleDescribeTable)
@@ -70,6 +72,7 @@ func (s *Server) Handler() http.Handler {
 
 	routes.add("POST /api/export", s.handleExport)
 	routes.add("POST /api/import", s.handleImport)
+	s.addTerminalRoutes(&routes)
 
 	mux := http.NewServeMux()
 	mux.Handle("/", routes.withFallback(s.spaHandler()))

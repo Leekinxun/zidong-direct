@@ -29,6 +29,55 @@ type Dialect interface {
 	PaginateSelect(baseSelect string, orderBy string, limit, offset, startParamIdx int) (string, []any)
 }
 
+type CommentedDialect interface {
+	ListDatabaseInfos(ctx context.Context, conn *sql.DB, cfg ConnectionConfig) ([]DatabaseInfo, error)
+	ListSchemaInfos(ctx context.Context, conn *sql.DB, cfg ConnectionConfig, database string) ([]SchemaInfo, error)
+}
+
+func GetDatabaseInfos(ctx context.Context, d Dialect, conn *sql.DB, cfg ConnectionConfig) ([]DatabaseInfo, []string, error) {
+	if cd, ok := d.(CommentedDialect); ok {
+		infos, err := cd.ListDatabaseInfos(ctx, conn, cfg)
+		if err == nil {
+			names := make([]string, len(infos))
+			for i, info := range infos {
+				names[i] = info.Name
+			}
+			return infos, names, nil
+		}
+	}
+	names, err := d.ListDatabases(ctx, conn, cfg)
+	if err != nil {
+		return nil, nil, err
+	}
+	infos := make([]DatabaseInfo, len(names))
+	for i, name := range names {
+		infos[i] = DatabaseInfo{Name: name}
+	}
+	return infos, names, nil
+}
+
+func GetSchemaInfos(ctx context.Context, d Dialect, conn *sql.DB, cfg ConnectionConfig, database string) ([]SchemaInfo, []string, error) {
+	if cd, ok := d.(CommentedDialect); ok {
+		infos, err := cd.ListSchemaInfos(ctx, conn, cfg, database)
+		if err == nil {
+			names := make([]string, len(infos))
+			for i, info := range infos {
+				names[i] = info.Name
+			}
+			return infos, names, nil
+		}
+	}
+	names, err := d.ListSchemas(ctx, conn, cfg, database)
+	if err != nil {
+		return nil, nil, err
+	}
+	infos := make([]SchemaInfo, len(names))
+	for i, name := range names {
+		infos[i] = SchemaInfo{Name: name}
+	}
+	return infos, names, nil
+}
+
 var registry = map[EngineType]Dialect{}
 
 func RegisterDialect(d Dialect) {

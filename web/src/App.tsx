@@ -27,6 +27,7 @@ import { RightInfoPane } from './components/RightInfoPane';
 import { SidebarTree, type SelectedTreeContext } from './components/SidebarTree';
 import { SqlWorkspace } from './components/SqlWorkspace';
 import { StructureDesigner } from './components/StructureDesigner';
+import { isDesktop } from './preferences';
 import type {
   ConnectionView,
   DatabaseObject,
@@ -36,6 +37,9 @@ import type {
 } from './types/db';
 
 const OBJECTS_TAB_ID = '__objects__';
+const TerminalWorkspace = React.lazy(() =>
+  import('./components/TerminalWorkspace').then(({ TerminalWorkspace }) => ({ default: TerminalWorkspace })),
+);
 
 const ENGINE_MENU_ITEMS: Array<{ engine: EngineType; label: string; badge: string }> = [
   { engine: 'mysql', label: 'MySQL / MariaDB', badge: '3306' },
@@ -70,8 +74,15 @@ export default function App() {
   const [initialModalEngine, setInitialModalEngine] = useState<EngineType | undefined>(undefined);
   const [editingConn, setEditingConn] = useState<ConnectionView | null>(null);
   const [showRightPane, setShowRightPane] = useState(false);
+  const [inspectorRevision, setInspectorRevision] = useState(0);
   const [refreshSignal, setRefreshSignal] = useState(0);
   const [globalIoModal, setGlobalIoModal] = useState<'import' | 'export' | null>(null);
+  const [terminalOpen, setTerminalOpen] = useState(false);
+
+  const showObjectDetails = () => {
+    setInspectorRevision((revision) => revision + 1);
+    setShowRightPane(true);
+  };
 
   useEffect(() => {
     const close = () => setConnMenuOpen(false);
@@ -364,6 +375,17 @@ export default function App() {
             <Terminal className="h-5 w-5 text-[#30d158]" strokeWidth={1.8} />
             <span className="text-[12.5px] font-medium">新建查询</span>
           </button>
+          {isDesktop && (
+            <button
+              type="button"
+              onClick={() => setTerminalOpen(true)}
+              className="apple-toolbar-btn"
+              title="打开 SSH 终端"
+            >
+              <Terminal className="h-5 w-5 text-[#64d2ff]" strokeWidth={1.8} />
+              <span className="text-[12.5px] font-medium">SSH 终端</span>
+            </button>
+          )}
 
           <div className="mx-1.5 h-7 w-px bg-white/[0.08]" />
 
@@ -430,7 +452,7 @@ export default function App() {
               setGlobalIoModal('import');
             }}
             className="apple-toolbar-btn"
-            title="从 CSV / JSON / SQL 脚本导入数据"
+            title="打开数据导入向导"
           >
             <Upload className="h-5 w-5 text-[#5e5ce6]" strokeWidth={1.8} />
             <span className="text-[12.5px] font-medium">导入</span>
@@ -508,6 +530,7 @@ export default function App() {
           onOpenTableData={handleOpenTableData}
           onDesignTable={handleDesignTable}
           onOpenQuery={handleOpenQuery}
+          onShowDetails={showObjectDetails}
           refreshSignal={refreshSignal}
         />
 
@@ -634,6 +657,7 @@ export default function App() {
                       onNewConnection={(eng) => openNewConnectionModal(eng)}
                       refreshSignal={refreshSignal}
                       onObjectsChanged={() => setRefreshSignal((n) => n + 1)}
+                      onShowDetails={showObjectDetails}
                     />
                   </div>
                 )}
@@ -728,6 +752,7 @@ export default function App() {
         {/* Right Collapsible Property & DDL Inspector */}
         {showRightPane && (
           <RightInfoPane
+            key={inspectorRevision}
             connection={selectedContext?.connection || connections[0] || null}
             database={selectedContext?.database || ''}
             schema={selectedContext?.schema || ''}
@@ -814,6 +839,15 @@ export default function App() {
           onClose={() => setGlobalIoModal(null)}
           onImported={() => setRefreshSignal((n) => n + 1)}
         />
+      )}
+      {terminalOpen && (
+        <React.Suspense fallback={<div role="status" className="sr-only">正在加载 SSH 终端</div>}>
+          <TerminalWorkspace
+            connections={connections}
+            initialConnectionId={selectedContext?.connection.id}
+            onClose={() => setTerminalOpen(false)}
+          />
+        </React.Suspense>
       )}
     </div>
   );

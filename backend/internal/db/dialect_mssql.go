@@ -122,12 +122,17 @@ func (d *mssqlDialect) ListObjects(ctx context.Context, conn *sql.DB, _, schema 
 	q := `
 SELECT o.name,
        CASE o.type WHEN 'U' THEN 'TABLE' WHEN 'V' THEN 'VIEW' ELSE 'TABLE' END AS obj_type,
-       COALESCE(SUM(CASE WHEN p.index_id IN (0,1) THEN p.rows ELSE 0 END), 0) AS row_est
+       COALESCE(p.row_est, 0) AS row_est,
+       CONVERT(nvarchar(4000), ep.value)
 FROM sys.objects o
 JOIN sys.schemas s ON s.schema_id = o.schema_id
-LEFT JOIN sys.partitions p ON p.object_id = o.object_id
+OUTER APPLY (
+  SELECT SUM(part.rows) AS row_est FROM sys.partitions part
+  WHERE part.object_id = o.object_id AND part.index_id IN (0, 1)
+) p
+LEFT JOIN sys.extended_properties ep ON ep.major_id = o.object_id
+ AND ep.class = 1 AND ep.minor_id = 0 AND ep.name = N'MS_Description'
 WHERE s.name = @p1 AND o.type IN ('U', 'V') AND o.is_ms_shipped = 0
-GROUP BY o.name, o.type
 ORDER BY obj_type, o.name`
 	rows, err := conn.QueryContext(ctx, q, schema)
 	if err != nil {
@@ -138,7 +143,8 @@ ORDER BY obj_type, o.name`
 	for rows.Next() {
 		var name, objType string
 		var est int64
-		if err := rows.Scan(&name, &objType, &est); err != nil {
+		var comment sql.NullString
+		if err := rows.Scan(&name, &objType, &est, &comment); err != nil {
 			return nil, err
 		}
 		estCopy := est
@@ -147,6 +153,7 @@ ORDER BY obj_type, o.name`
 			Type:        objType,
 			Schema:      schema,
 			RowEstimate: &estCopy,
+			Comment:     comment.String,
 		})
 	}
 	return out, rows.Err()

@@ -38,6 +38,28 @@ func (s *Server) handleListDatabases(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"databases": dbs})
 }
 
+func (s *Server) handleDescribeDatabase(w http.ResponseWriter, r *http.Request) {
+	database := r.URL.Query().Get("database")
+	if database == "" {
+		writeError(w, http.StatusBadRequest, "bad_request", "database parameter is required")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), s.cfg.QueryTimeout)
+	defer cancel()
+
+	_, handle, dialect, err := s.acquireDB(ctx, routeConnectionID(r), database)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "connect_failed", err.Error())
+		return
+	}
+	details, err := db.ReadDatabaseDetails(ctx, handle, dialect.Engine(), database)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "describe_failed", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"database": details})
+}
+
 func (s *Server) handleListSchemas(w http.ResponseWriter, r *http.Request) {
 	connID := routeConnectionID(r)
 	database := r.URL.Query().Get("database")
@@ -107,6 +129,9 @@ func (s *Server) handleDescribeTable(w http.ResponseWriter, r *http.Request) {
 	}
 	if desc.DDL == "" && len(desc.Columns) > 0 {
 		desc.DDL = db.BuildCreateTableSQL(dialect, desc) + ";"
+	}
+	if comment, err := db.ReadTableComment(ctx, handle, dialect.Engine(), desc); err == nil {
+		desc.Comment = comment
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"schema": desc})
 }

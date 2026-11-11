@@ -2,9 +2,14 @@ package api
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"runtime"
+	"strconv"
 	"strings"
 
 	"web-db-client/internal/db"
@@ -164,35 +169,104 @@ func (l *lazyExportWriter) Write(p []byte) (int, error) {
 	return l.w.Write(p)
 }
 
+type importFile interface {
+	io.ReaderAt
+	io.Closer
+}
+
 func (s *Server) handleImport(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, s.cfg.MaxUploadBytes)
 	if err := r.ParseMultipartForm(32 << 20); err != nil {
 		writeError(w, http.StatusBadRequest, "import_error", "解析上传表单失败: "+err.Error())
 		return
 	}
+	defer r.MultipartForm.RemoveAll()
+
 	connID := r.FormValue("connectionId")
 	database := r.FormValue("database")
 	schema := r.FormValue("schema")
 	table := r.FormValue("table")
-	format := strings.ToLower(strings.TrimSpace(r.FormValue("format")))
-	emptyAsNull := r.FormValue("emptyAsNull") != "false"
-	continueOnError := r.FormValue("continueOnError") == "true"
+	preview := r.FormValue("preview") == "true"
+	opts := db.ImportOptions{
+		Format:          strings.ToLower(strings.TrimSpace(r.FormValue("format"))),
+		Encoding:        r.FormValue("encoding"),
+		Delimiter:       r.FormValue("delimiter"),
+		Widths:          r.FormValue("widths"),
+		Sheet:           r.FormValue("sheet"),
+		XMLRow:          r.FormValue("xmlRow"),
+		Mode:            r.FormValue("mode"),
+		SourceDSN:       strings.TrimSpace(r.FormValue("sourceDsn")),
+		SourceUser:      r.FormValue("sourceUser"),
+		SourcePassword:  r.FormValue("sourcePassword"),
+		SourceTable:     strings.TrimSpace(r.FormValue("sourceTable")),
+		SourceMaxBytes:  s.cfg.MaxUploadBytes,
+		NoHeader:        r.FormValue("noHeader") == "true",
+		EmptyAsNull:     r.FormValue("emptyAsNull") != "false",
+		ContinueOnError: r.FormValue("continueOnError") == "true",
+	}
+	if raw := r.FormValue("skipRows"); raw != "" {
+		count, err := strconv.Atoi(raw)
+		if err != nil || count < 0 || count > 100000 {
+			writeError(w, http.StatusBadRequest, "bad_request", "跳过行数必须介于 0 和 100000 之间")
+			return
+		}
+		opts.SkipRows = count
+	}
+	if raw := r.FormValue("mappings"); raw != "" {
+		if len(raw) > 256<<10 || json.Unmarshal([]byte(raw), &opts.Mappings) != nil || opts.Mappings == nil {
+			writeError(w, http.StatusBadRequest, "bad_request", "字段映射格式无效")
+			return
+		}
+	}
 
+	if opts.Format == "json" && opts.Mappings == nil && opts.Mode == "" {
+		opts.EmptyAsNull = false // Legacy JSON imports preserve explicit empty strings.
+	}
 	if connID == "" {
 		writeError(w, http.StatusBadRequest, "bad_request", "connectionId is required")
 		return
 	}
-
-	file, _, err := r.FormFile("file")
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "import_error", "缺少上传文件")
+	if opts.Format != "sql" && strings.TrimSpace(table) == "" {
+		writeError(w, http.StatusBadRequest, "bad_request", "数据文件导入必须指定目标表")
 		return
 	}
-	defer file.Close()
+	if preview && opts.Format == "sql" {
+		writeError(w, http.StatusBadRequest, "bad_request", "SQL 脚本不支持预览")
+		return
+	}
+	if !preview && (opts.Mode == "replace" || opts.Mode == "delete") && r.FormValue("confirmed") != "true" {
+		writeError(w, http.StatusBadRequest, "confirmation_required", "此模式会删除目标表数据，请先确认")
+		return
+	}
+
+	sourceURL := strings.TrimSpace(r.FormValue("sourceUrl"))
+	if sourceURL != "" && !s.cfg.DesktopMode && !s.cfg.AuthEnabled {
+		writeError(w, http.StatusForbidden, "authentication_required", "URL 导入仅在桌面版或已配置登录验证的 Web 部署中可用")
+		return
+	}
+	odbc := opts.Format == "odbc"
+	access := opts.Format == "mdb" || opts.Format == "accdb"
+	if odbc || access {
+		if !s.cfg.DesktopMode || runtime.GOOS != "windows" {
+			writeError(w, http.StatusBadRequest, "unsupported_source", "ODBC 和 Access 仅在安装了对应驱动的 Windows 桌面版可用")
+			return
+		}
+		if opts.SourceTable == "" || (odbc && opts.SourceDSN == "") {
+			writeError(w, http.StatusBadRequest, "bad_request", "请输入源表名及适用的 ODBC 数据源名称")
+			return
+		}
+		if sourceURL != "" || (odbc && len(r.MultipartForm.File["file"]) > 0) {
+			writeError(w, http.StatusBadRequest, "bad_request", "ODBC 请选择系统数据源，Access 请选择本地文件")
+			return
+		}
+	}
+	if sourceURL != "" && opts.Format == "sql" {
+		writeError(w, http.StatusBadRequest, "bad_request", "请先下载并核对 SQL 脚本，再选择本地文件")
+		return
+	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), s.cfg.QueryTimeout)
 	defer cancel()
-
 	cfg, handle, dialect, err := s.acquireDB(ctx, connID, database)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "connect_failed", err.Error())
@@ -202,8 +276,55 @@ func (s *Server) handleImport(w http.ResponseWriter, r *http.Request) {
 		database = cfg.Database
 	}
 
-	if format == "sql" {
-		rawBytes, err := io.ReadAll(file)
+	var file importFile
+	var size int64
+	if sourceURL != "" {
+		if len(r.MultipartForm.File["file"]) > 0 {
+			writeError(w, http.StatusBadRequest, "bad_request", "请选择文件或输入 URL")
+			return
+		}
+		file, size, err = openImportURL(ctx, sourceURL, s.cfg.MaxUploadBytes)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "download_failed", err.Error())
+			return
+		}
+	} else if !odbc {
+		if len(r.MultipartForm.File["file"]) != 1 {
+			writeError(w, http.StatusBadRequest, "bad_request", "请选择一个本地文件")
+			return
+		}
+		uploaded, header, err := r.FormFile("file")
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "import_error", "缺少上传文件")
+			return
+		}
+		file, size = uploaded, header.Size
+	}
+	if file != nil {
+		defer file.Close()
+	}
+
+	var sourceDigest string
+	if sourceURL != "" {
+		digest := sha256.New()
+		if _, err := io.Copy(digest, io.NewSectionReader(file, 0, size)); err != nil {
+			writeError(w, http.StatusBadRequest, "read_failed", err.Error())
+			return
+		}
+		sourceDigest = hex.EncodeToString(digest.Sum(nil))
+		if !preview && r.FormValue("sourceDigest") != sourceDigest {
+			writeError(w, http.StatusConflict, "source_changed", "URL 数据与预览不同，请重新预览后导入")
+			return
+		}
+	}
+
+	if opts.Format == "sql" {
+		reader, err := db.DecodeImportText(io.NewSectionReader(file, 0, size), opts.Encoding)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "read_failed", err.Error())
+			return
+		}
+		rawBytes, err := io.ReadAll(reader)
 		if err != nil {
 			writeError(w, http.StatusBadRequest, "read_failed", err.Error())
 			return
@@ -218,9 +339,7 @@ func (s *Server) handleImport(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "tx_failed", err.Error())
 			return
 		}
-		defer func() {
-			_ = tx.Rollback()
-		}()
+		defer tx.Rollback()
 		var total int64
 		for idx, st := range stmts {
 			res, execErr := tx.ExecContext(ctx, st)
@@ -242,12 +361,17 @@ func (s *Server) handleImport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if table == "" {
-		writeError(w, http.StatusBadRequest, "bad_request", "CSV/JSON 导入必须指定目标表")
+	if preview {
+		data, err := db.PreviewImport(ctx, handle, dialect, database, schema, table, file, size, opts)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "preview_failed", err.Error())
+			return
+		}
+		data.SourceDigest = sourceDigest
+		writeJSON(w, http.StatusOK, data)
 		return
 	}
-
-	summary, err := db.ImportCSVOrJSON(ctx, handle, dialect, database, schema, table, format, file, emptyAsNull, continueOnError)
+	summary, err := db.ImportRows(ctx, handle, dialect, database, schema, table, file, size, opts)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "import_failed", err.Error())
 		return

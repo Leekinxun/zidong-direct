@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { Download, Loader2, Upload, X } from 'lucide-react';
+import { useState } from 'react';
+import { Download, Loader2, X } from 'lucide-react';
 import { api, ApiError } from '../api/client';
 import type { FilterCondition } from '../types/db';
+import { DataImportModal } from './DataImportModal';
 
 interface Props {
   mode: 'export' | 'import';
@@ -17,25 +18,16 @@ interface Props {
   onImported?: () => void;
 }
 
-export const ImportExportModal: React.FC<Props> = ({
-  mode,
-  connectionId,
-  database,
-  schema,
-  table,
-  sql,
-  filters,
-  sortColumn,
-  sortDir,
-  onClose,
-  onImported,
-}) => {
+export function ImportExportModal({ mode, ...props }: Props) {
+  return mode === 'import' ? <DataImportModal {...props} /> : <DataExportModal {...props} />;
+}
+
+function DataExportModal({
+  connectionId, database, schema, table, sql, filters, sortColumn, sortDir, onClose,
+}: Omit<Props, 'mode'>) {
   const [format, setFormat] = useState<'csv' | 'json' | 'sql'>('csv');
   const [withBom, setWithBom] = useState(true);
   const [maxRows, setMaxRows] = useState(50000);
-  const [file, setFile] = useState<File | null>(null);
-  const [emptyAsNull, setEmptyAsNull] = useState(true);
-  const [continueOnError, setContinueOnError] = useState(false);
   const [running, setRunning] = useState(false);
   const [resultMsg, setResultMsg] = useState('');
   const [error, setError] = useState('');
@@ -65,51 +57,18 @@ export const ImportExportModal: React.FC<Props> = ({
     }
   };
 
-  const handleImport = async () => {
-    if (!file) {
-      setError('请先选择要导入的文件');
-      return;
-    }
-    setRunning(true);
-    setError('');
-    setResultMsg('');
-    try {
-      const res = await api.importData({
-        connectionId,
-        database,
-        schema,
-        table: format === 'sql' ? undefined : table,
-        format,
-        file,
-        emptyAsNull,
-        continueOnError,
-      });
-      const extra = res.failedRows ? `，失败 ${res.failedRows} 行` : '';
-      const errList = res.errors && res.errors.length > 0 ? `\n示例错误：${res.errors.join(' | ')}` : '';
-      setResultMsg(`导入完成：成功写入 ${res.insertedRows} 行${extra}${errList}`);
-      onImported?.();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : '导入失败');
-    } finally {
-      setRunning(false);
-    }
-  };
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
       <div className="w-full max-w-md rounded-lg border border-slate-700 bg-slate-900 shadow-2xl">
         <div className="flex items-center justify-between border-b border-slate-800 px-4 py-3">
-          <h3 className="text-sm font-semibold text-slate-100">
-            {mode === 'export' ? `导出数据 (${table || '查询结果'})` : `导入数据 (${table || 'SQL 脚本'})`}
-          </h3>
-          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-200">
+          <h3 className="text-sm font-semibold text-slate-100">导出数据 ({table || '查询结果'})</h3>
+          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-200" aria-label="关闭">
             <X className="h-4 w-4" />
           </button>
         </div>
-
         <div className="space-y-4 p-4">
-          <div>
-            <label className="mb-1 block text-xs text-slate-300">文件格式</label>
+          <label className="block space-y-1 text-xs text-slate-300">
+            <span>文件格式</span>
             <select
               value={format}
               onChange={(e) => setFormat(e.target.value as 'csv' | 'json' | 'sql')}
@@ -117,69 +76,29 @@ export const ImportExportModal: React.FC<Props> = ({
             >
               <option value="csv">CSV 表格 (.csv)</option>
               <option value="json">JSON 数组 (.json)</option>
-              <option value="sql">{mode === 'export' ? 'SQL INSERT 脚本 (.sql)' : 'SQL 事务脚本 (.sql)'}</option>
+              <option value="sql">SQL INSERT 脚本 (.sql)</option>
             </select>
-          </div>
-
-          {mode === 'export' ? (
-            <>
-              {format === 'csv' && (
-                <label className="flex items-center gap-2 text-xs text-slate-300">
-                  <input
-                    type="checkbox"
-                    checked={withBom}
-                    onChange={(e) => setWithBom(e.target.checked)}
-                    className="rounded border-slate-600 bg-slate-800"
-                  />
-                  写入 UTF-8 BOM 头（推荐：解决 Win7 Excel 打开中文乱码）
-                </label>
-              )}
-              <div>
-                <label className="mb-1 block text-xs text-slate-300">最大导出行数</label>
-                <input
-                  type="number"
-                  value={maxRows}
-                  onChange={(e) => setMaxRows(Number(e.target.value) || 50000)}
-                  className="w-full rounded border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm text-slate-100 outline-none focus:border-indigo-500"
-                />
-              </div>
-            </>
-          ) : (
-            <>
-              <div>
-                <label className="mb-1 block text-xs text-slate-300">选择本地文件</label>
-                <input
-                  type="file"
-                  accept=".csv,.json,.sql,.txt"
-                  onChange={(e) => setFile(e.target.files?.[0] || null)}
-                  className="w-full rounded border border-slate-700 bg-slate-800 px-2 py-1.5 text-xs text-slate-200"
-                />
-              </div>
-              {format === 'csv' && (
-                <label className="flex items-center gap-2 text-xs text-slate-300">
-                  <input
-                    type="checkbox"
-                    checked={emptyAsNull}
-                    onChange={(e) => setEmptyAsNull(e.target.checked)}
-                    className="rounded border-slate-600 bg-slate-800"
-                  />
-                  空单元格自动转成 NULL
-                </label>
-              )}
-              {format !== 'sql' && (
-                <label className="flex items-center gap-2 text-xs text-slate-300">
-                  <input
-                    type="checkbox"
-                    checked={continueOnError}
-                    onChange={(e) => setContinueOnError(e.target.checked)}
-                    className="rounded border-slate-600 bg-slate-800"
-                  />
-                  单行失败时继续导入其余行
-                </label>
-              )}
-            </>
+          </label>
+          {format === 'csv' && (
+            <label className="flex items-center gap-2 text-xs text-slate-300">
+              <input
+                type="checkbox"
+                checked={withBom}
+                onChange={(e) => setWithBom(e.target.checked)}
+                className="rounded border-slate-600 bg-slate-800"
+              />
+              写入 UTF-8 BOM 头（推荐：解决 Win7 Excel 打开中文乱码）
+            </label>
           )}
-
+          <label className="block space-y-1 text-xs text-slate-300">
+            <span>最大导出行数</span>
+            <input
+              type="number"
+              value={maxRows}
+              onChange={(e) => setMaxRows(Number(e.target.value) || 50000)}
+              className="w-full rounded border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm text-slate-100 outline-none focus:border-indigo-500"
+            />
+          </label>
           {resultMsg && (
             <div className="whitespace-pre-wrap rounded border border-emerald-800 bg-emerald-950/70 px-3 py-2 text-xs text-emerald-200">
               {resultMsg}
@@ -190,33 +109,22 @@ export const ImportExportModal: React.FC<Props> = ({
               {error}
             </div>
           )}
-
           <div className="flex justify-end gap-2 border-t border-slate-800 pt-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded border border-slate-700 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800"
-            >
+            <button type="button" onClick={onClose} className="rounded border border-slate-700 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800">
               关闭
             </button>
             <button
               type="button"
               disabled={running}
-              onClick={mode === 'export' ? handleExport : handleImport}
+              onClick={handleExport}
               className="flex items-center gap-1.5 rounded bg-indigo-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
             >
-              {running ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : mode === 'export' ? (
-                <Download className="h-3.5 w-3.5" />
-              ) : (
-                <Upload className="h-3.5 w-3.5" />
-              )}
-              {mode === 'export' ? '开始导出' : '开始导入'}
+              {running ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+              开始导出
             </button>
           </div>
         </div>
       </div>
     </div>
   );
-};
+}

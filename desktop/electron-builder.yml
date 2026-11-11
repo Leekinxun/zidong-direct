@@ -20,8 +20,10 @@ win:
   icon: assets/icon.png
   target: nsis
 nsis:
+  include: installer.nsh
   oneClick: true
   perMachine: false
   packElevateHelper: false
   deleteAppDataOnUninstall: false
+  uninstallDisplayName: ${productName} ${version}
   artifactName: Zidong-Direct-Win7-${version}-${arch}-Setup.${ext}

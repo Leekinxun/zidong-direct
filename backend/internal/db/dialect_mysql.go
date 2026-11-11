@@ -96,7 +96,8 @@ func (d *mysqlDialect) ListSchemas(_ context.Context, _ *sql.DB, _ ConnectionCon
 
 func (d *mysqlDialect) ListObjects(ctx context.Context, conn *sql.DB, database, _ string) ([]DatabaseObject, error) {
 	q := `
-SELECT TABLE_NAME, TABLE_TYPE, COALESCE(ENGINE, ''), TABLE_ROWS, COALESCE(TABLE_COMMENT, '')
+SELECT TABLE_NAME, TABLE_TYPE, COALESCE(ENGINE, ''), TABLE_ROWS,
+       CASE WHEN TABLE_TYPE = 'VIEW' THEN '' ELSE COALESCE(TABLE_COMMENT, '') END
 FROM information_schema.TABLES
 WHERE TABLE_SCHEMA = ?
 ORDER BY TABLE_TYPE, TABLE_NAME`

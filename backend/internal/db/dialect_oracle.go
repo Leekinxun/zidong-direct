@@ -97,13 +97,15 @@ func (d *oracleDialect) ListObjects(ctx context.Context, conn *sql.DB, _, schema
 		_ = conn.QueryRowContext(ctx, "SELECT USER FROM DUAL").Scan(&schema)
 	}
 	q := `
-SELECT table_name, 'TABLE', num_rows
-FROM all_tables
-WHERE owner = :1
+SELECT t.table_name, 'TABLE', t.num_rows, c.comments
+FROM all_tables t
+LEFT JOIN all_tab_comments c ON c.owner = t.owner AND c.table_name = t.table_name
+WHERE t.owner = :1
 UNION ALL
-SELECT view_name, 'VIEW', NULL
-FROM all_views
-WHERE owner = :2
+SELECT v.view_name, 'VIEW', NULL, c.comments
+FROM all_views v
+LEFT JOIN all_tab_comments c ON c.owner = v.owner AND c.table_name = v.view_name
+WHERE v.owner = :2
 ORDER BY 2, 1`
 	rows, err := conn.QueryContext(ctx, q, schema, schema)
 	if err != nil {
@@ -114,7 +116,8 @@ ORDER BY 2, 1`
 	for rows.Next() {
 		var name, objType string
 		var numRows sql.NullInt64
-		if err := rows.Scan(&name, &objType, &numRows); err != nil {
+		var comment sql.NullString
+		if err := rows.Scan(&name, &objType, &numRows, &comment); err != nil {
 			return nil, err
 		}
 		var estPtr *int64
@@ -127,6 +130,7 @@ ORDER BY 2, 1`
 			Type:        objType,
 			Schema:      schema,
 			RowEstimate: estPtr,
+			Comment:     comment.String,
 		})
 	}
 	return out, rows.Err()

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Code2, KeyRound, Loader2, Play, Plus, Save, Table2, Trash2 } from 'lucide-react';
 import { api, ApiError } from '../api/client';
 import type {
@@ -40,6 +40,8 @@ export const StructureDesigner: React.FC<Props> = ({
   const [columns, setColumns] = useState<ColumnDef[]>([]);
   const [indexes, setIndexes] = useState<IndexDef[]>([]);
   const [foreignKeys, setForeignKeys] = useState<ForeignKeyDef[]>([]);
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
+  const activeResize = useRef<{ column: string; pointer: number; x: number; width: number } | null>(null);
 
   const [loading, setLoading] = useState(false);
   const [preview, setPreview] = useState<DDLPreviewResponse | null>(null);
@@ -48,9 +50,26 @@ export const StructureDesigner: React.FC<Props> = ({
   const [error, setError] = useState('');
 
   const typeSuggestions = capabilities?.dataTypes || ['INT', 'VARCHAR(255)', 'TEXT', 'DATETIME'];
+  const fieldColumns = [
+    { id: 'position', label: '#', width: 48 },
+    { id: 'name', label: '字段名', width: 150, resizable: true },
+    { id: 'type', label: '数据类型', width: 155, resizable: true },
+    { id: 'nullable', label: '允许空', width: 72 },
+    { id: 'primary', label: '主键', width: 72 },
+    { id: 'increment', label: '自增', width: 64 },
+    { id: 'default', label: engine === 'postgres' ? '默认值 / 生成列' : '默认值', width: engine === 'postgres' ? 300 : 165, resizable: true },
+    { id: 'comment', label: '字段注释', width: 180, resizable: true },
+    { id: 'actions', label: '操作', width: 56 },
+  ];
+
+  const resizeColumn = (column: string, width: number) => {
+    const minWidth = column === 'default' && engine === 'postgres' ? 230 : 96;
+    setColumnWidths((widths) => ({ ...widths, [column]: Math.round(Math.max(minWidth, Math.min(width, 800))) }));
+  };
 
   const loadExisting = async () => {
     if (mode === 'create') {
+      setOriginalSchema(undefined);
       const idType = engine === 'sqlite' ? 'INTEGER' : engine === 'oracle' ? 'NUMBER(19)' : 'BIGINT';
       setColumns([
         {
@@ -298,6 +317,15 @@ export const StructureDesigner: React.FC<Props> = ({
         </div>
       </div>
 
+      {originalSchema?.comment && (
+        <details className="border-b border-white/[0.08] px-3 py-2 text-sm text-slate-300">
+          <summary className="cursor-pointer text-slate-200">表注释</summary>
+          <p className="mt-2 max-h-32 overflow-auto whitespace-pre-wrap break-words select-text">
+            {originalSchema.comment}
+          </p>
+        </details>
+      )}
+
       {/* Apple Segmented Sub-Tab Strip: 字段 | 索引 | 外键 | SQL 预览 */}
       <div className="flex items-center border-b border-white/[0.08] bg-[#1a1a1d] px-3 py-1.5 text-xs">
         <div className="apple-segmented">
@@ -351,20 +379,59 @@ export const StructureDesigner: React.FC<Props> = ({
               ))}
             </datalist>
 
-            <table className="w-full border-collapse text-left text-[13.5px]">
+            <table
+              className="table-fixed border-collapse text-left text-[13.5px]"
+              style={{ width: fieldColumns.reduce((sum, col) => sum + (columnWidths[col.id] ?? col.width), 0) }}
+            >
+              <colgroup>
+                {fieldColumns.map((col) => (
+                  <col key={col.id} style={{ width: columnWidths[col.id] ?? col.width }} />
+                ))}
+              </colgroup>
               <thead className="bg-slate-900">
                 <tr>
-                  <th className="w-12 border border-slate-800 px-2.5 py-2.5 text-center">#</th>
-                  <th className="border border-slate-800 px-3 py-2.5">字段名</th>
-                  <th className="border border-slate-800 px-3 py-2.5">数据类型</th>
-                  <th className="w-20 border border-slate-800 px-2.5 py-2.5 text-center">允许空</th>
-                  <th className="w-20 border border-slate-800 px-2.5 py-2.5 text-center">主键</th>
-                  <th className="w-20 border border-slate-800 px-2.5 py-2.5 text-center">自增</th>
-                  <th className="border border-slate-800 px-3 py-2.5">
-                    {engine === 'postgres' ? '默认值 / 生成列 (Generated)' : '默认值'}
-                  </th>
-                  <th className="border border-slate-800 px-3 py-2.5">注释</th>
-                  <th className="w-14 border border-slate-800 px-2.5 py-2.5 text-center">操作</th>
+                  {fieldColumns.map((col) => (
+                    <th
+                      key={col.id}
+                      scope="col"
+                      className={`relative whitespace-nowrap border border-slate-800 px-3 py-2.5 ${col.resizable ? 'text-left' : 'text-center'}`}
+                    >
+                      {col.label}
+                      {col.resizable && (
+                        <button
+                          type="button"
+                          aria-label={`调整${col.label}列宽`}
+                          title="拖动边缘或按左右方向键调整列宽"
+                          className="absolute inset-y-0 right-0 z-10 w-3 touch-none cursor-col-resize border-r-2 border-slate-600 hover:border-sky-400 focus-visible:border-sky-400 focus-visible:outline-none"
+                          onPointerDown={(event) => {
+                            if (event.button !== 0) return;
+                            event.preventDefault();
+                            activeResize.current = {
+                              column: col.id,
+                              pointer: event.pointerId,
+                              x: event.clientX,
+                              width: columnWidths[col.id] ?? col.width,
+                            };
+                            event.currentTarget.setPointerCapture(event.pointerId);
+                          }}
+                          onPointerMove={(event) => {
+                            const drag = activeResize.current;
+                            if (drag?.column === col.id && drag.pointer === event.pointerId) {
+                              resizeColumn(drag.column, drag.width + event.clientX - drag.x);
+                            }
+                          }}
+                          onLostPointerCapture={(event) => {
+                            if (activeResize.current?.pointer === event.pointerId) activeResize.current = null;
+                          }}
+                          onKeyDown={(event) => {
+                            if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+                            event.preventDefault();
+                            resizeColumn(col.id, (columnWidths[col.id] ?? col.width) + (event.key === 'ArrowLeft' ? -16 : 16));
+                          }}
+                        />
+                      )}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
@@ -450,7 +517,7 @@ export const StructureDesigner: React.FC<Props> = ({
                     </td>
                     <td className="border border-slate-800 p-1.5">
                       {engine === 'postgres' ? (
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-start gap-1.5">
                           <select
                             value={col.generatedKind || (col.generatedExpr ? 'STORED' : '')}
                             onChange={(e) => {
@@ -487,8 +554,9 @@ export const StructureDesigner: React.FC<Props> = ({
                             <option value="VIRTUAL">GEN VIRTUAL (PG18)</option>
                           </select>
                           {col.generatedKind || col.generatedExpr ? (
-                            <input
-                              type="text"
+                            <textarea
+                              rows={1}
+                              title="拖动右下角调整生成表达式编辑框高度"
                               placeholder="生成表达式，如: price * qty 或 lower(email)"
                               value={col.generatedExpr ?? ''}
                               onChange={(e) =>
@@ -505,11 +573,12 @@ export const StructureDesigner: React.FC<Props> = ({
                                   ),
                                 )
                               }
-                              className="w-full rounded border border-purple-800/60 bg-purple-950/30 px-2.5 py-1.5 font-mono text-[13.5px] text-purple-100 outline-none focus:ring-1 focus:ring-purple-500"
+                              className="h-9 min-h-9 max-h-64 w-full min-w-0 resize-y rounded border border-purple-800/60 bg-purple-950/30 px-2.5 py-1.5 font-mono text-[13.5px] text-purple-100 outline-none focus:ring-1 focus:ring-purple-500"
                             />
                           ) : (
-                            <input
-                              type="text"
+                            <textarea
+                              rows={1}
+                              title="拖动右下角调整默认值编辑框高度"
                               placeholder="无"
                               value={col.defaultValue ?? ''}
                               onChange={(e) =>
@@ -521,13 +590,14 @@ export const StructureDesigner: React.FC<Props> = ({
                                   ),
                                 )
                               }
-                              className="w-full rounded bg-slate-900 px-2.5 py-1.5 font-mono text-[13.5px] text-slate-100 outline-none focus:ring-1 focus:ring-indigo-500"
+                              className="h-9 min-h-9 max-h-64 w-full min-w-0 resize-y rounded bg-slate-900 px-2.5 py-1.5 font-mono text-[13.5px] text-slate-100 outline-none focus:ring-1 focus:ring-indigo-500"
                             />
                           )}
                         </div>
                       ) : (
-                        <input
-                          type="text"
+                        <textarea
+                          rows={1}
+                          title="拖动右下角调整默认值编辑框高度"
                           placeholder="无"
                           value={col.defaultValue ?? ''}
                           onChange={(e) =>
@@ -539,20 +609,21 @@ export const StructureDesigner: React.FC<Props> = ({
                               ),
                             )
                           }
-                          className="w-full rounded bg-slate-900 px-2.5 py-1.5 font-mono text-[13.5px] text-slate-100 outline-none focus:ring-1 focus:ring-indigo-500"
+                          className="block h-9 min-h-9 max-h-64 w-full resize-y rounded bg-slate-900 px-2.5 py-1.5 font-mono text-[13.5px] text-slate-100 outline-none focus:ring-1 focus:ring-indigo-500"
                         />
                       )}
                     </td>
                     <td className="border border-slate-800 p-1.5">
-                      <input
-                        type="text"
+                      <textarea
+                        rows={1}
+                        title="拖动右下角调整字段注释编辑框高度"
                         value={col.comment ?? ''}
                         onChange={(e) =>
                           setColumns((prev) =>
                             prev.map((c, i) => (i === idx ? { ...c, comment: e.target.value } : c)),
                           )
                         }
-                        className="w-full rounded bg-slate-900 px-2.5 py-1.5 text-[13.5px] text-slate-100 outline-none focus:ring-1 focus:ring-indigo-500"
+                        className="block h-9 min-h-9 max-h-64 w-full resize-y rounded bg-slate-900 px-2.5 py-1.5 text-[13.5px] text-slate-100 outline-none focus:ring-1 focus:ring-indigo-500"
                       />
                     </td>
                     <td className="border border-slate-800 p-1.5 text-center">

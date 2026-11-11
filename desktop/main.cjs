@@ -1,4 +1,5 @@
 const { app, BrowserWindow, Menu, dialog, ipcMain, safeStorage, session } = require('electron');
+const { execFile } = require('node:child_process');
 const { randomUUID } = require('node:crypto');
 const fs = require('node:fs/promises');
 const path = require('node:path');
@@ -134,6 +135,13 @@ async function openWindow(origin, token) {
   });
   win.webContents.on('will-redirect', allowNavigation);
   win.webContents.on('will-attach-webview', (event) => event.preventDefault());
+  win.webContents.on('before-input-event', (event, input) => {
+    if (input.type === 'keyDown' && input.control && input.shift && !input.alt && !input.meta
+      && !input.isAutoRepeat && input.key.toLowerCase() === 'v') {
+      event.preventDefault();
+      win.webContents.paste();
+    }
+  });
   win.on('close', (event) => {
     if (!quitReady) {
       event.preventDefault();
@@ -165,17 +173,37 @@ function registerPreferences() {
 }
 
 function setMenu() {
+  const fileItems = [];
+  if (process.platform === 'win32' && app.isPackaged) {
+    fileItems.push({
+      label: '打开卸载面板…',
+      click: () => {
+        const controlPanel = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'control.exe');
+        execFile(controlPanel, ['appwiz.cpl'], { windowsHide: true }, (error) => {
+          if (error) dialog.showErrorBox('无法打开卸载面板', '请从 Windows 控制面板的“程序和功能”卸载紫东直连。');
+        });
+      },
+    }, { type: 'separator' });
+  }
+  fileItems.push({ label: '退出', role: 'quit' });
+  const editingItems = [
+    { label: '撤销', role: 'undo' },
+    { label: '重做', role: 'redo' },
+    { type: 'separator' },
+    { label: '剪切', role: 'cut' },
+    { label: '复制', role: 'copy' },
+    { label: '粘贴', role: 'paste' },
+    { label: '全选', role: 'selectAll' },
+  ];
+  if (process.platform === 'win32') {
+    // Let the focused editor or PTY handle Ctrl key combinations.
+    for (const item of editingItems) {
+      if (item.role) item.registerAccelerator = false;
+    }
+  }
   const menu = [
-    { label: '文件', submenu: [{ label: '退出', role: 'quit' }] },
-    { label: '编辑', submenu: [
-      { label: '撤销', role: 'undo' },
-      { label: '重做', role: 'redo' },
-      { type: 'separator' },
-      { label: '剪切', role: 'cut' },
-      { label: '复制', role: 'copy' },
-      { label: '粘贴', role: 'paste' },
-      { label: '全选', role: 'selectAll' },
-    ] },
+    { label: '文件', submenu: fileItems },
+    { label: '编辑', submenu: editingItems },
     { label: '窗口', submenu: [
       { label: '最小化', role: 'minimize' },
       { label: '切换全屏', role: 'togglefullscreen' },

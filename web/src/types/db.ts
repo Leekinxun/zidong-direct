@@ -85,6 +85,12 @@ export interface DatabaseObject {
   comment?: string;
 }
 
+export interface DatabaseDetails {
+  name: string;
+  comment?: string;
+  commentSupported: boolean;
+}
+
 export interface ColumnDef {
   name: string;
   originalName?: string;
@@ -120,6 +126,7 @@ export interface TableSchema {
   database: string;
   schema: string;
   table: string;
+  comment?: string;
   columns: ColumnDef[];
   indexes: IndexDef[];
   foreignKeys: ForeignKeyDef[];

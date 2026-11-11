@@ -8,6 +8,7 @@ import {
   Eye,
   FilePlus2,
   FolderOpen,
+  Info,
   LayoutGrid,
   List,
   Loader2,
@@ -39,6 +40,7 @@ interface Props {
   onCategoryChange: (cat: ObjectCategory) => void;
   selectedObject: DatabaseObject | null;
   onSelectObject: (obj: DatabaseObject | null) => void;
+  onShowDetails?: () => void;
   onSelectDatabaseSchema: (conn: ConnectionView, db: string, sch: string) => void;
   onOpenTableData: (conn: ConnectionView, db: string, sch: string, table: string) => void;
   onDesignTable: (conn: ConnectionView, db: string, sch: string, table: string, mode: 'create' | 'alter') => void;
@@ -64,6 +66,7 @@ export const ObjectBrowserPane: React.FC<Props> = ({
   onCategoryChange,
   selectedObject,
   onSelectObject,
+  onShowDetails,
   onSelectDatabaseSchema,
   onOpenTableData,
   onDesignTable,
@@ -659,7 +662,10 @@ export const ObjectBrowserPane: React.FC<Props> = ({
                     <td className="border-r border-slate-900 px-3.5 py-2.5 text-slate-400">
                       {obj.engine || obj.schema || schema || '-'}
                     </td>
-                    <td className="max-w-xs truncate border-r border-slate-900 px-3.5 py-2.5 text-slate-400">
+                    <td
+                      className="max-w-xs truncate border-r border-slate-900 px-3.5 py-2.5 text-slate-400"
+                      title={obj.comment}
+                    >
                       {obj.comment || ''}
                     </td>
                     <td
@@ -860,6 +866,20 @@ export const ObjectBrowserPane: React.FC<Props> = ({
             <Copy className="h-3.5 w-3.5 text-slate-400" />
             复制对象名
           </button>
+          {onShowDetails && (
+            <button
+              type="button"
+              onClick={() => {
+                onSelectObject(contextMenu.object);
+                setContextMenu(null);
+                onShowDetails();
+              }}
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-indigo-600 hover:text-white"
+            >
+              <Info className="h-3.5 w-3.5 text-sky-400" />
+              查看注释
+            </button>
+          )}
           <div className="my-1 border-t border-slate-800" />
           {contextMenu.object.type === 'TABLE' && (
             <>

@@ -9,6 +9,7 @@ import {
   FilePlus2,
   Folder,
   FolderOpen,
+  Info,
   KeyRound,
   Layers,
   Loader2,
@@ -39,6 +40,7 @@ interface Props {
   selectedObject: DatabaseObject | null;
   onSelectContext: (ctx: SelectedTreeContext) => void;
   onSelectObject: (obj: DatabaseObject | null) => void;
+  onShowDetails?: () => void;
   onOpenObjectsOverview?: (cat: ObjectCategory, ctx: SelectedTreeContext) => void;
   onNewConnection: (engine?: EngineType) => void;
   onEditConnection: (conn: ConnectionView) => void;
@@ -80,6 +82,7 @@ export const SidebarTree: React.FC<Props> = ({
   selectedObject,
   onSelectContext,
   onSelectObject,
+  onShowDetails,
   onOpenObjectsOverview,
   onNewConnection,
   onEditConnection,
@@ -904,6 +907,21 @@ export const SidebarTree: React.FC<Props> = ({
               <div className="border-b border-white/[0.08] px-2.5 py-1 font-mono font-medium text-[#9e9ea9] truncate">
                 {contextMenu.database}
               </div>
+              {onShowDetails && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onSelectContext({ connection: contextMenu.conn, database: contextMenu.database, schema: '' });
+                    onSelectObject(null);
+                    setContextMenu(null);
+                    onShowDetails();
+                  }}
+                  className="flex w-full items-center gap-2 rounded-[6px] px-2.5 py-1.5 text-left hover:bg-[#0a84ff] hover:text-white"
+                >
+                  <Info className="h-3.5 w-3.5 text-[#64d2ff]" />
+                  查看数据库注释
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => {
@@ -1016,6 +1034,25 @@ export const SidebarTree: React.FC<Props> = ({
               <div className="border-b border-white/[0.08] px-2.5 py-1 font-mono font-medium text-[#9e9ea9] truncate">
                 {contextMenu.object.name}
               </div>
+              {onShowDetails && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onSelectContext({
+                      connection: contextMenu.conn,
+                      database: contextMenu.database,
+                      schema: contextMenu.schema,
+                    });
+                    onSelectObject(contextMenu.object);
+                    setContextMenu(null);
+                    onShowDetails();
+                  }}
+                  className="flex w-full items-center gap-2 rounded-[6px] px-2.5 py-1.5 text-left hover:bg-[#0a84ff] hover:text-white"
+                >
+                  <Info className="h-3.5 w-3.5 text-[#64d2ff]" />
+                  查看注释
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => {

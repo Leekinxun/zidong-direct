@@ -14,7 +14,7 @@ import {
   Terminal,
 } from 'lucide-react';
 import { api } from '../api/client';
-import type { ConnectionView, DatabaseObject, EngineType, TableSchema } from '../types/db';
+import type { ConnectionView, DatabaseDetails, DatabaseObject, EngineType, TableSchema } from '../types/db';
 
 interface Props {
   connection: ConnectionView | null;
@@ -45,17 +45,34 @@ export const RightInfoPane: React.FC<Props> = ({
   onOpenQuery,
 }) => {
   const [activeTab, setActiveTab] = useState<'general' | 'columns' | 'ddl'>('general');
-  const [tableSchema, setTableSchema] = useState<TableSchema | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [tableDetails, setTableDetails] = useState<{ key: string; schema: TableSchema | null }>();
+  const [databaseDetails, setDatabaseDetails] = useState<{ key: string; database: DatabaseDetails | null }>();
   const [copied, setCopied] = useState(false);
+  const databaseKey = JSON.stringify([connection?.id, database]);
+  const tableKey = JSON.stringify([databaseKey, schema, selectedObject?.name, selectedObject?.schema]);
+  const tableSchema = tableDetails?.key === tableKey ? tableDetails.schema : null;
+  const databaseInfo = databaseDetails?.key === databaseKey ? databaseDetails.database : undefined;
+  const loading = Boolean(connection && selectedObject && tableDetails?.key !== tableKey);
+  const tableComment = tableSchema?.comment ?? selectedObject?.comment;
 
   useEffect(() => {
-    if (!connection || !selectedObject) {
-      setTableSchema(null);
-      return;
-    }
+    if (!connection || !database) return;
     let cancelled = false;
-    setLoading(true);
+    api.describeDatabase(connection.id, database)
+      .then((res) => {
+        if (!cancelled) setDatabaseDetails({ key: databaseKey, database: res.database });
+      })
+      .catch(() => {
+        if (!cancelled) setDatabaseDetails({ key: databaseKey, database: null });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [databaseKey]);
+
+  useEffect(() => {
+    if (!connection || !selectedObject) return;
+    let cancelled = false;
     api
       .describeTable(
         connection.id,
@@ -65,24 +82,19 @@ export const RightInfoPane: React.FC<Props> = ({
       )
       .then((res) => {
         if (!cancelled) {
-          setTableSchema(res.schema);
+          setTableDetails({ key: tableKey, schema: res.schema });
         }
       })
       .catch(() => {
         if (!cancelled) {
-          setTableSchema(null);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setLoading(false);
+          setTableDetails({ key: tableKey, schema: null });
         }
       });
 
     return () => {
       cancelled = true;
     };
-  }, [connection?.id, database, schema, selectedObject?.name, selectedObject?.schema]);
+  }, [tableKey]);
 
   const handleCopyDDL = () => {
     if (!tableSchema?.ddl) return;
@@ -258,12 +270,15 @@ export const RightInfoPane: React.FC<Props> = ({
                       </div>
                     </>
                   )}
-                  {selectedObject.comment && (
-                    <div className="py-2">
-                      <dt className="mb-1 text-slate-400">表注释</dt>
-                      <dd className="rounded bg-slate-900 p-2 text-slate-300">{selectedObject.comment}</dd>
-                    </div>
-                  )}
+                  <div className="py-2">
+                    <dt className="mb-1 text-slate-400">{selectedObject.type === 'TABLE' ? '表注释' : '视图注释'}</dt>
+                    <dd className="whitespace-pre-wrap break-words rounded bg-slate-900 p-2 text-slate-300">
+                      {tableComment
+                        || (loading ? '正在读取注释…' : tableComment === ''
+                          ? '未设置注释' : connection.engine === 'sqlite'
+                            ? 'SQLite 没有表注释元数据' : '未读取到注释')}
+                    </dd>
+                  </div>
                 </dl>
               </div>
             )}
@@ -307,6 +322,16 @@ export const RightInfoPane: React.FC<Props> = ({
                     {database || connection.database || '-'}
                   </dd>
                 </div>
+                {database && (
+                  <div className="py-2">
+                    <dt className="mb-1 text-slate-400">数据库注释</dt>
+                    <dd className="whitespace-pre-wrap break-words rounded bg-slate-900 p-2 text-slate-300">
+                      {databaseInfo === undefined ? '正在读取注释…' : databaseInfo === null
+                        ? '未读取到数据库注释' : databaseInfo.commentSupported
+                          ? databaseInfo.comment || '未设置注释' : '此数据库未提供库级注释元数据'}
+                    </dd>
+                  </div>
+                )}
                 {schema && (
                   <div className="flex justify-between py-2">
                     <dt className="text-slate-400">当前模式</dt>
