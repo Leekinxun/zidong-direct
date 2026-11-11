@@ -21,7 +21,7 @@ func (s *Server) acquireDB(ctx context.Context, connID, database string) (db.Con
 }
 
 func (s *Server) handleListDatabases(w http.ResponseWriter, r *http.Request) {
-	connID := r.PathValue("id")
+	connID := routeConnectionID(r)
 	ctx, cancel := context.WithTimeout(r.Context(), s.cfg.QueryTimeout)
 	defer cancel()
 
@@ -39,7 +39,7 @@ func (s *Server) handleListDatabases(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleListSchemas(w http.ResponseWriter, r *http.Request) {
-	connID := r.PathValue("id")
+	connID := routeConnectionID(r)
 	database := r.URL.Query().Get("database")
 	ctx, cancel := context.WithTimeout(r.Context(), s.cfg.QueryTimeout)
 	defer cancel()
@@ -58,7 +58,7 @@ func (s *Server) handleListSchemas(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleListObjects(w http.ResponseWriter, r *http.Request) {
-	connID := r.PathValue("id")
+	connID := routeConnectionID(r)
 	database := r.URL.Query().Get("database")
 	schema := r.URL.Query().Get("schema")
 	ctx, cancel := context.WithTimeout(r.Context(), s.cfg.QueryTimeout)
@@ -81,7 +81,7 @@ func (s *Server) handleListObjects(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleDescribeTable(w http.ResponseWriter, r *http.Request) {
-	connID := r.PathValue("id")
+	connID := routeConnectionID(r)
 	database := r.URL.Query().Get("database")
 	schema := r.URL.Query().Get("schema")
 	table := r.URL.Query().Get("table")
@@ -112,7 +112,7 @@ func (s *Server) handleDescribeTable(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleAutocomplete(w http.ResponseWriter, r *http.Request) {
-	connID := r.PathValue("id")
+	connID := routeConnectionID(r)
 	database := r.URL.Query().Get("database")
 	schema := r.URL.Query().Get("schema")
 	ctx, cancel := context.WithTimeout(r.Context(), s.cfg.QueryTimeout)

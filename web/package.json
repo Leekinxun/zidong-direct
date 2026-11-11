@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build && node scripts/check-win7-compat.mjs",
+    "build:desktop": "tsc --noEmit && vite build --mode desktop && node scripts/check-win7-compat.mjs dist-desktop chrome108",
     "typecheck": "tsc --noEmit",
     "preview": "vite preview"
   },

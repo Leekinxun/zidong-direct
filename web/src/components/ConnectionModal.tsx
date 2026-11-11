@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { CheckCircle2, Download, FolderOpen, KeyRound, Loader2, Plus, Shield, Upload, X } from 'lucide-react';
 import { api, ApiError } from '../api/client';
+import { isDesktop } from '../preferences';
 import type { ConnectionInput, ConnectionView, EngineType, SQLiteFileEntry } from '../types/db';
 
 interface Props {
@@ -254,7 +255,7 @@ export const ConnectionModal: React.FC<Props> = ({ editing, initialEngine, onClo
                 <div className="space-y-3 rounded border border-slate-800 bg-slate-950/60 p-3">
                   <div>
                     <label className="mb-1 block text-xs text-slate-300">
-                      SQLite 文件路径（容器 SQLITE_DIR 内相对路径）
+                      {isDesktop ? 'SQLite 文件路径（应用数据库目录内相对路径）' : 'SQLite 文件路径（容器 SQLITE_DIR 内相对路径）'}
                     </label>
                     <div className="flex gap-2">
                       <input
@@ -297,15 +298,20 @@ export const ConnectionModal: React.FC<Props> = ({ editing, initialEngine, onClo
                     </div>
                     <label className="flex cursor-pointer items-center gap-1 rounded border border-indigo-700 bg-indigo-950/60 px-2.5 py-1 text-xs text-indigo-300 hover:bg-indigo-900/60">
                       <Upload className="h-3.5 w-3.5" />
-                      上传 .db 文件
+                      {isDesktop ? '导入 SQLite 文件' : '上传 .db 文件'}
                       <input type="file" accept=".db,.sqlite,.sqlite3" className="hidden" onChange={handleUploadSqlite} />
                     </label>
                   </div>
 
+                  {isDesktop && (
+                    <p className="text-xs text-slate-400">请关闭源数据库并确认 WAL 中的改动已写入库文件，或选择一致性备份。</p>
+                  )}
+
                   {sqliteFiles.length > 0 && (
                     <div>
                       <div className="mb-1 flex items-center gap-1 text-xs text-slate-400">
-                        <FolderOpen className="h-3.5 w-3.5" /> 容器目录已有文件（点击选用）：
+                        <FolderOpen className="h-3.5 w-3.5" />
+                        {isDesktop ? '应用数据库文件（点击选用）' : '容器目录已有文件（点击选用）'}
                       </div>
                       <div className="max-h-28 overflow-y-auto rounded border border-slate-800 bg-slate-900 p-1">
                         {sqliteFiles.map((f) => (

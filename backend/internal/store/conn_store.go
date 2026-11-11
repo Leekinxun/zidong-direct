@@ -306,6 +306,17 @@ func (s *ConnectionStore) Get(id string) (db.ConnectionConfig, error) {
 	return s.decryptConnection(item)
 }
 
+func (s *ConnectionStore) ValidateCredentials() error {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, item := range s.connections {
+		if _, err := s.decryptConnection(item); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (s *ConnectionStore) Create(in db.ConnectionInput) (db.ConnectionView, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -471,13 +482,16 @@ func ResolveSQLitePath(sqliteDir string, allowArbitrary bool, inputPath string) 
 	}
 	baseReal, err := filepath.EvalSymlinks(baseAbs)
 	if err != nil {
-		baseReal = baseAbs
+		return "", err
 	}
 
 	var candidate string
 	if filepath.IsAbs(cleaned) {
 		candidate = filepath.Clean(cleaned)
 	} else {
+		if !allowArbitrary && !filepath.IsLocal(cleaned) {
+			return "", errors.New("invalid relative SQLite file path")
+		}
 		candidate = filepath.Join(baseReal, filepath.Clean(cleaned))
 	}
 
@@ -490,15 +504,25 @@ func ResolveSQLitePath(sqliteDir string, allowArbitrary bool, inputPath string) 
 		return "", err
 	}
 
-	// Verify parent directory symlink resolution does not escape sqliteDir
-	parentDir := filepath.Dir(absCandidate)
-	resolvedParent, err := filepath.EvalSymlinks(parentDir)
-	if err == nil {
-		absCandidate = filepath.Join(resolvedParent, filepath.Base(absCandidate))
+	// Resolve the file itself when it exists, including symlinks and junctions.
+	// A new file is allowed only under an existing, resolved parent directory.
+	if _, err := os.Lstat(absCandidate); errors.Is(err, os.ErrNotExist) {
+		parent, err := filepath.EvalSymlinks(filepath.Dir(absCandidate))
+		if err != nil {
+			return "", err
+		}
+		absCandidate = filepath.Join(parent, filepath.Base(absCandidate))
+	} else if err != nil {
+		return "", err
+	} else {
+		absCandidate, err = filepath.EvalSymlinks(absCandidate)
+		if err != nil {
+			return "", err
+		}
 	}
 
 	rel, err := filepath.Rel(baseReal, absCandidate)
-	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+	if err != nil || rel == "." || !filepath.IsLocal(rel) {
 		return "", fmt.Errorf("SQLite path %q must stay inside configured SQLITE_DIR (%s)", inputPath, baseReal)
 	}
 	return absCandidate, nil

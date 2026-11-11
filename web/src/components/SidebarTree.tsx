@@ -22,6 +22,7 @@ import {
   X,
 } from 'lucide-react';
 import { api, ApiError } from '../api/client';
+import { readSidebarWidth, saveSidebarWidth, SIDEBAR_WIDTH } from '../preferences';
 import type { ConnectionView, DatabaseObject, EngineCapabilities, EngineType } from '../types/db';
 import type { ObjectCategory } from './ObjectBrowserPane';
 
@@ -101,36 +102,26 @@ export const SidebarTree: React.FC<Props> = ({
   const [treeError, setTreeError] = useState('');
   const [searchFilter, setSearchFilter] = useState('');
   const [contextMenu, setContextMenu] = useState<TreeContextMenu | null>(null);
-  const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
-    try {
-      const saved = Number(localStorage.getItem('zd_sidebar_width_v2'));
-      if (saved >= 220 && saved <= 680) return saved;
-    } catch {
-      // ignore
-    }
-    return 300;
-  });
+  const [sidebarWidth, setSidebarWidth] = useState(readSidebarWidth);
   const [resizing, setResizing] = useState(false);
 
   const startResize = (e: React.MouseEvent) => {
     e.preventDefault();
     const startX = e.clientX;
     const startWidth = sidebarWidth;
+    let latestWidth = startWidth;
     setResizing(true);
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
 
     const onMouseMove = (moveEvt: MouseEvent) => {
-      const next = Math.max(220, Math.min(680, startWidth + (moveEvt.clientX - startX)));
-      setSidebarWidth(next);
-      try {
-        localStorage.setItem('zd_sidebar_width_v2', String(next));
-      } catch {
-        // ignore
-      }
+      const width = Math.round(startWidth + moveEvt.clientX - startX);
+      latestWidth = Math.max(SIDEBAR_WIDTH.min, Math.min(SIDEBAR_WIDTH.max, width));
+      setSidebarWidth(latestWidth);
     };
 
     const onMouseUp = () => {
+      if (latestWidth !== startWidth) saveSidebarWidth(latestWidth);
       setResizing(false);
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
@@ -1083,12 +1074,8 @@ export const SidebarTree: React.FC<Props> = ({
       <div
         onMouseDown={startResize}
         onDoubleClick={() => {
-          setSidebarWidth(300);
-          try {
-            localStorage.setItem('zd_sidebar_width_v2', '300');
-          } catch {
-            // ignore
-          }
+          setSidebarWidth(SIDEBAR_WIDTH.initial);
+          saveSidebarWidth(SIDEBAR_WIDTH.initial);
         }}
         title="左右拖动调整侧边栏宽度（双击恢复默认宽度）"
         className={`absolute -right-1 top-0 z-30 h-full w-2 cursor-col-resize transition-colors ${

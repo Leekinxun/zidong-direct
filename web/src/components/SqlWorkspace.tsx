@@ -6,6 +6,7 @@ import { MSSQL, MySQL, PostgreSQL, SQLite, StandardSQL, sql } from '@codemirror/
 import { oneDark } from '@codemirror/theme-one-dark';
 import { Clock, Download, Eraser, Loader2, Play, Sparkles, Terminal } from 'lucide-react';
 import { api, ApiError } from '../api/client';
+import { saveSqlHistoryItem, useSqlHistory } from '../preferences';
 import type { ConnectionView, EngineCapabilities, EngineType, QueryResult } from '../types/db';
 import { ImportExportModal } from './ImportExportModal';
 
@@ -18,37 +19,6 @@ interface Props {
   schema: string;
   initialSql?: string;
   onContextChange?: (conn: ConnectionView, database: string, schema: string) => void;
-}
-
-interface SqlHistoryItem {
-  sql: string;
-  connName: string;
-  database: string;
-  time: string;
-}
-
-const HISTORY_STORAGE_KEY = 'webdb_sql_history_v1';
-
-function loadHistory(): SqlHistoryItem[] {
-  try {
-    const raw = localStorage.getItem(HISTORY_STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.slice(0, 30) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveHistoryItem(item: SqlHistoryItem): SqlHistoryItem[] {
-  const prev = loadHistory().filter((h) => h.sql !== item.sql);
-  const next = [item, ...prev].slice(0, 30);
-  try {
-    localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(next));
-  } catch {
-    // ignore storage quota errors
-  }
-  return next;
 }
 
 function getSqlDialect(engine: EngineType) {
@@ -112,7 +82,7 @@ export const SqlWorkspace: React.FC<Props> = ({
   const [error, setError] = useState('');
   const [exportSql, setExportSql] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [history, setHistory] = useState<SqlHistoryItem[]>(() => loadHistory());
+  const history = useSqlHistory();
 
   // Sync external initial connection if list loads later
   useEffect(() => {
@@ -209,14 +179,12 @@ export const SqlWorkspace: React.FC<Props> = ({
 
     setRunning(true);
     setError('');
-    setHistory(
-      saveHistoryItem({
-        sql: queryText.trim(),
-        connName: activeConn?.name || '',
-        database: selectedDb,
-        time: new Date().toLocaleTimeString(),
-      }),
-    );
+    saveSqlHistoryItem({
+      sql: queryText.trim(),
+      connName: activeConn?.name || '',
+      database: selectedDb,
+      time: new Date().toLocaleTimeString(),
+    });
     try {
       const res = await api.executeSQL({
         connectionId: selectedConnId,

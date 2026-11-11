@@ -32,46 +32,47 @@ func NewServer(cfg config.Config, st *store.ConnectionStore, pools *db.PoolManag
 }
 
 func (s *Server) Handler() http.Handler {
-	mux := http.NewServeMux()
+	var routes apiRoutes
 
-	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, _ *http.Request) {
+	routes.add("GET /api/health", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
 	})
-	mux.HandleFunc("GET /api/auth/status", s.auth.HandleStatus)
-	mux.HandleFunc("POST /api/auth/login", s.auth.HandleLogin)
-	mux.HandleFunc("POST /api/auth/logout", s.auth.HandleLogout)
+	routes.add("GET /api/auth/status", s.auth.HandleStatus)
+	routes.add("POST /api/auth/login", s.auth.HandleLogin)
+	routes.add("POST /api/auth/logout", s.auth.HandleLogout)
 
-	mux.HandleFunc("GET /api/capabilities", s.handleCapabilities)
-	mux.HandleFunc("GET /api/connections", s.handleListConnections)
-	mux.HandleFunc("POST /api/connections", s.handleCreateConnection)
-	mux.HandleFunc("PUT /api/connections/{id}", s.handleUpdateConnection)
-	mux.HandleFunc("DELETE /api/connections/{id}", s.handleDeleteConnection)
-	mux.HandleFunc("POST /api/connections/test", s.handleTestConnection)
-	mux.HandleFunc("POST /api/connections/{id}/disconnect", s.handleDisconnect)
+	routes.add("GET /api/capabilities", s.handleCapabilities)
+	routes.add("GET /api/connections", s.handleListConnections)
+	routes.add("POST /api/connections", s.handleCreateConnection)
+	routes.add("PUT /api/connections/{id}", s.handleUpdateConnection)
+	routes.add("DELETE /api/connections/{id}", s.handleDeleteConnection)
+	routes.add("POST /api/connections/test", s.handleTestConnection)
+	routes.add("POST /api/connections/{id}/disconnect", s.handleDisconnect)
 
-	mux.HandleFunc("GET /api/sqlite/files", s.handleListSQLiteFiles)
-	mux.HandleFunc("POST /api/sqlite/create", s.handleCreateSQLiteFile)
-	mux.HandleFunc("POST /api/sqlite/upload", s.handleUploadSQLiteFile)
-	mux.HandleFunc("GET /api/sqlite/download", s.handleDownloadSQLiteFile)
+	routes.add("GET /api/sqlite/files", s.handleListSQLiteFiles)
+	routes.add("POST /api/sqlite/create", s.handleCreateSQLiteFile)
+	routes.add("POST /api/sqlite/upload", s.handleUploadSQLiteFile)
+	routes.add("GET /api/sqlite/download", s.handleDownloadSQLiteFile)
 
-	mux.HandleFunc("GET /api/connections/{id}/databases", s.handleListDatabases)
-	mux.HandleFunc("GET /api/connections/{id}/schemas", s.handleListSchemas)
-	mux.HandleFunc("GET /api/connections/{id}/objects", s.handleListObjects)
-	mux.HandleFunc("GET /api/connections/{id}/table/describe", s.handleDescribeTable)
-	mux.HandleFunc("GET /api/connections/{id}/autocomplete", s.handleAutocomplete)
+	routes.add("GET /api/connections/{id}/databases", s.handleListDatabases)
+	routes.add("GET /api/connections/{id}/schemas", s.handleListSchemas)
+	routes.add("GET /api/connections/{id}/objects", s.handleListObjects)
+	routes.add("GET /api/connections/{id}/table/describe", s.handleDescribeTable)
+	routes.add("GET /api/connections/{id}/autocomplete", s.handleAutocomplete)
 
-	mux.HandleFunc("POST /api/table/data", s.handleTableData)
-	mux.HandleFunc("POST /api/table/mutate", s.handleTableMutate)
-	mux.HandleFunc("POST /api/query/execute", s.handleExecuteSQL)
+	routes.add("POST /api/table/data", s.handleTableData)
+	routes.add("POST /api/table/mutate", s.handleTableMutate)
+	routes.add("POST /api/query/execute", s.handleExecuteSQL)
 
-	mux.HandleFunc("POST /api/table/ddl/preview", s.handlePreviewDDL)
-	mux.HandleFunc("POST /api/table/ddl/execute", s.handleExecuteDDL)
-	mux.HandleFunc("POST /api/table/action", s.handleTableAction)
+	routes.add("POST /api/table/ddl/preview", s.handlePreviewDDL)
+	routes.add("POST /api/table/ddl/execute", s.handleExecuteDDL)
+	routes.add("POST /api/table/action", s.handleTableAction)
 
-	mux.HandleFunc("POST /api/export", s.handleExport)
-	mux.HandleFunc("POST /api/import", s.handleImport)
+	routes.add("POST /api/export", s.handleExport)
+	routes.add("POST /api/import", s.handleImport)
 
-	mux.Handle("/", s.spaHandler())
+	mux := http.NewServeMux()
+	mux.Handle("/", routes.withFallback(s.spaHandler()))
 
 	return s.auth.Middleware(mux)
 }

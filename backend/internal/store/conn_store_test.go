@@ -1,6 +1,7 @@
 package store_test
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -8,6 +9,24 @@ import (
 	"web-db-client/internal/db"
 	"web-db-client/internal/store"
 )
+
+func TestResolveSQLitePathRejectsEscapingFileLink(t *testing.T) {
+	root := t.TempDir()
+	managed := filepath.Join(root, "managed")
+	if err := os.Mkdir(managed, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	outside := filepath.Join(root, "outside.db")
+	if err := os.WriteFile(outside, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(managed, "link.db")); err != nil {
+		t.Skipf("test user cannot create a symlink: %v", err)
+	}
+	if _, err := store.ResolveSQLitePath(managed, false, "link.db"); err == nil {
+		t.Fatal("SQLite file symlink escapes the managed directory")
+	}
+}
 
 func TestConnectionStoreEncryptsSecretsAndPreservesOnUpdate(t *testing.T) {
 	tmp := t.TempDir()

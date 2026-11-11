@@ -1,0 +1,18 @@
+{
+  "name": "zidong-direct-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "紫东直连 Windows 7 桌面客户端",
+  "author": "Zidong Direct contributors",
+  "license": "MIT",
+  "main": "main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test",
+    "package:win7:x64": "node scripts/build-win7.cjs"
+  },
+  "devDependencies": {
+    "electron": "22.3.27",
+    "electron-builder": "26.18.1"
+  }
+}

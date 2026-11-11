@@ -9,6 +9,7 @@ import (
 )
 
 type Config struct {
+	DesktopMode               bool
 	Port                      string
 	DataDir                   string
 	MetaDir                   string

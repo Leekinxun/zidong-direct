@@ -133,12 +133,48 @@ npm run dev
 - Vite 构建配置（[web/vite.config.ts](./web/vite.config.ts)）已显式指定 `target: ['chrome109', 'firefox115']` 与 `cssTarget: ['chrome109', 'firefox115']`，并采用 Tailwind CSS v3（规避 v4 仅支持新内核的 CSS 函数）。
 - 每次执行 `npm run build` 都会运行 [web/scripts/check-win7-compat.mjs](./web/scripts/check-win7-compat.mjs)，自动扫描产物中是否存在仅限 Chrome 110+ / 111+ / 117+ 才支持的 JS/CSS 特性（如 `.toSorted()`、`Object.groupBy`、`color-mix()`、`oklch()` 等）。
 
+### Windows 7 SP1 x64 桌面版
+
+桌面版由 Electron 22.3.27 自带的 Chromium 108 渲染，安装包内置 Go 后端。应用启动时分配回环端口并生成本次启动的访问凭证。数据库连接和 SSH 隧道从终端发起，SQLite 文件可离线使用。目标机无需另装 Node.js、Go 或 Docker。
+
+在现代 Windows 构建机上准备 Node.js 22 和 **Go 1.20.14**，从仓库根目录执行以下命令。
+
+```powershell
+npm ci --prefix web
+npm ci --prefix desktop
+npm test --prefix desktop
+npm run package:win7:x64 --prefix desktop
+```
+
+安装程序位于 `desktop/dist/Zidong-Direct-Win7-<版本>-x64-Setup.exe`。附加 `-- --dir` 可生成用于调试的未安装目录。构建机已有其他 Go 版本时，可将 `ZIDONG_WIN7_GO` 指向 Go 1.20.14 的 `go.exe`。 [Windows 构建工作流](./.github/workflows/desktop-win7.yml)
+
+桌面连接和 SQLite 文件位于 `%APPDATA%\Zidong Direct\workspace\data`，偏好和查询历史位于同一 `workspace` 目录。卸载保留用户档案。新连接的主密钥由 Windows DPAPI 保护。升级前退出应用并备份 `workspace`，DPAPI 密钥恢复需使用原 Windows 用户档案。
+
+迁移 Web/Docker 数据前，关闭源服务和桌面版，确认 SQLite 已完成 WAL 检查点，并保留源目录备份。将 `meta/connections.json`、`meta/.master.key` 和 `sqlite/` 复制到一个全新的桌面 `data` 目录。部署通过 `APP_SECRET_KEY` 提供主密钥时，将该环境变量原始字符串的 SHA-256 十六进制摘要写入复制档案的 `meta/.master.key`。桌面后端确认凭据可解密后才将复制的主密钥转换为 DPAPI。以普通用户登录目标机器后先验证连接与 SQLite 再切换使用。
+
+Win7 SP1 x64 安装、签名信任和目标数据库版本须在目标镜像验收。当前 Go 兼容构建的 32 位目标受达梦驱动整数溢出阻塞。Electron 22、Go 1.20 和 Win7 均已结束维护，兼容安装包适用于经过安全评估的受控内网试点。 [Electron 支持说明](https://www.electronjs.org/blog/windows-7-to-8-1-deprecation-notice) · [Go Windows 兼容说明](https://go.dev/doc/go1.20#windows)
+
+#### 在 macOS 开发和测试
+
+准备 Node.js 22 和 Go 1.20.14 或更新版本，首次在仓库根目录安装依赖，再启动桌面应用。
+
+```bash
+npm ci --prefix web
+npm ci --prefix desktop
+npm run dev:electron
+```
+
+`npm run dev:electron` 构建 Chromium 108 前端，用 `backend/go.win7.mod` 编译本机 Go 后端，并打开 Electron 22 窗口。代码改动后退出应用并重新运行命令。若 Go 不在 PATH 中，可用 `ZIDONG_DEV_GO=/absolute/path/to/go npm run dev:electron` 指定。
+
+开发数据保存在 `~/Library/Application Support/Zidong Direct Dev/workspace`。用临时档案测试时可执行 `npm run dev:electron -- --user-data-dir="$(mktemp -d)"`。macOS 可用于验证桌面流程与本地 SQLite，Win7 安装和 Windows 凭据保护仍需在目标系统验证。
+
 ### 🗂️ 项目结构
 
 ```text
 zidong-direct/
 ├── Dockerfile                  # 多阶段构建（Node 构建前端 + 纯 Go 编译后端 + Alpine 运行时）
 ├── docker-compose.yml          # 一键编排与持久化配置
+├── desktop/                    # Electron 主进程、预加载桥接与 Win7 x64 打包
 ├── backend/
 │   ├── cmd/server/main.go      # HTTP 服务入口与静态资源托管
 │   └── internal/

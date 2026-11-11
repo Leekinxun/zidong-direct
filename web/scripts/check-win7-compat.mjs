@@ -3,10 +3,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const assetsDir = path.resolve(__dirname, '../dist/assets');
+const [outDir = 'dist', target = 'chrome109'] = process.argv.slice(2);
+const assetsDir = path.resolve(__dirname, '..', outDir, 'assets');
+const browserLabel = target === 'chrome108' ? 'Chromium 108' : 'Chrome 109 / Firefox 115';
 
 if (!fs.existsSync(assetsDir)) {
-  console.error('dist/assets not found');
+  console.error(`${outDir}/assets not found`);
   process.exit(1);
 }
 
@@ -25,6 +27,13 @@ const forbiddenCssPatterns = [
   { name: 'oklab() (Chrome 111+)', re: /\boklab\s*\(/ },
   { name: '@starting-style (Chrome 117+)', re: /@starting-style\b/ },
 ];
+
+if (target === 'chrome108') {
+  forbiddenCssPatterns.push(
+    { name: 'lh length unit (Chrome 109+)', re: /\b\d+(?:\.\d+)?lh\b/i },
+    { name: 'hyphenate-limit-chars (Chrome 109+)', re: /\bhyphenate-limit-chars\s*:/i },
+  );
+}
 
 const violations = [];
 for (const entry of fs.readdirSync(assetsDir)) {
@@ -46,11 +55,11 @@ for (const entry of fs.readdirSync(assetsDir)) {
 }
 
 if (violations.length > 0) {
-  console.error('Win7 browser compatibility check failed (Chrome 109 / Firefox 115):');
+  console.error(`Win7 compatibility scan failed (${browserLabel}):`);
   for (const v of violations) {
     console.error(' -', v);
   }
   process.exit(1);
 }
 
-console.log('Win7 browser compatibility check passed (Chrome 109 / Firefox 115 safe).');
+console.log(`Win7 compatibility scan passed (${browserLabel}).`);

@@ -1,0 +1,7 @@
+{
+  "name": "zidong-direct",
+  "private": true,
+  "scripts": {
+    "dev:electron": "node desktop/scripts/dev-electron.cjs"
+  }
+}

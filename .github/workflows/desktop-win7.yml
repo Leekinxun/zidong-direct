@@ -1,0 +1,44 @@
+name: Windows 7 desktop
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'backend/**'
+      - 'desktop/**'
+      - 'web/**'
+      - '.github/workflows/desktop-win7.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: windows-2022
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.20.14'
+          cache-dependency-path: backend/go.win7.sum
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            desktop/package-lock.json
+            web/package-lock.json
+      - name: Test the compatibility backend
+        working-directory: backend
+        run: go test -mod=readonly -modfile=go.win7.mod ./...
+      - run: npm ci --prefix web
+      - run: npm ci --prefix desktop
+      - run: npm test --prefix desktop
+      - run: npm run package:win7:x64 --prefix desktop
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zidong-direct-win7-x64
+          path: desktop/dist/*-Setup.exe
+          if-no-files-found: error

@@ -1,0 +1,27 @@
+appId: io.github.leekinxun.zidongdirect
+productName: 紫东直连
+executableName: ZidongDirect
+directories:
+  output: dist
+files:
+  - main.cjs
+  - backend.cjs
+  - profile.cjs
+  - preload.cjs
+  - package.json
+extraResources:
+  - from: .staging/zidong-backend.exe
+    to: zidong-backend.exe
+  - from: ../web/dist-desktop
+    to: web
+  - from: ../LICENSE
+    to: LICENSE-Zidong-Direct.txt
+win:
+  icon: assets/icon.png
+  target: nsis
+nsis:
+  oneClick: true
+  perMachine: false
+  packElevateHelper: false
+  deleteAppDataOnUninstall: false
+  artifactName: Zidong-Direct-Win7-${version}-${arch}-Setup.${ext}

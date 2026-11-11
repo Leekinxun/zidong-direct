@@ -24,6 +24,13 @@ type Cipher struct {
 	key []byte
 }
 
+func NewCipherFromKey(key []byte) (*Cipher, error) {
+	if len(key) != 32 {
+		return nil, errors.New("master key must contain 32 bytes")
+	}
+	return &Cipher{key: append([]byte(nil), key...)}, nil
+}
+
 func NewCipher(secret string, keyFilePath string) (*Cipher, error) {
 	if strings.TrimSpace(secret) != "" {
 		sum := sha256.Sum256([]byte(secret))

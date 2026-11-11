@@ -115,6 +115,23 @@ func TestSQLiteEndToEndWorkflow(t *testing.T) {
 	_ = json.NewDecoder(r.Body).Decode(&createOut)
 	r.Body.Close()
 	connID := createOut.Connection.ID
+	r = doJSON("GET", "/api/connections/"+connID+"/databases", nil)
+	if r.StatusCode != http.StatusOK {
+		t.Fatalf("list databases failed: %d", r.StatusCode)
+	}
+	r.Body.Close()
+
+	r = doJSON("HEAD", "/api/connections/"+connID+"/databases", nil)
+	if r.StatusCode != http.StatusOK {
+		t.Fatalf("HEAD on GET route failed: %d", r.StatusCode)
+	}
+	r.Body.Close()
+
+	r = doJSON("POST", "/api/connections/"+connID+"/databases", nil)
+	if r.StatusCode != http.StatusNotFound {
+		t.Fatalf("unexpected fallback status for unsupported method: %d", r.StatusCode)
+	}
+	r.Body.Close()
 
 	// Preview & Execute CREATE TABLE DDL
 	r = doJSON("POST", "/api/table/ddl/preview", map[string]any{

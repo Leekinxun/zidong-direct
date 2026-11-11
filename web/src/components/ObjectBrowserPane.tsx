@@ -22,18 +22,12 @@ import {
   X,
 } from 'lucide-react';
 import { api, ApiError } from '../api/client';
+import { useSqlHistory } from '../preferences';
 import type { ConnectionView, DatabaseObject, EngineCapabilities, EngineType } from '../types/db';
 import { BrandLogo } from './BrandLogo';
 import { ImportExportModal } from './ImportExportModal';
 
 export type ObjectCategory = 'all' | 'tables' | 'views' | 'queries';
-
-interface SavedQueryEntry {
-  sql: string;
-  connName: string;
-  database: string;
-  time: string;
-}
 
 interface Props {
   connections: ConnectionView[];
@@ -58,17 +52,6 @@ interface ContextMenuState {
   x: number;
   y: number;
   object: DatabaseObject;
-}
-
-function loadSavedQueries(): SavedQueryEntry[] {
-  try {
-    const raw = localStorage.getItem('webdb_sql_history_v1');
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
 }
 
 export const ObjectBrowserPane: React.FC<Props> = ({
@@ -99,7 +82,7 @@ export const ObjectBrowserPane: React.FC<Props> = ({
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [ioModal, setIoModal] = useState<{ mode: 'export' | 'import'; table: string } | null>(null);
-  const [savedQueries, setSavedQueries] = useState<SavedQueryEntry[]>([]);
+  const savedQueries = useSqlHistory();
 
   const supportsSchemas = connection ? (capabilities[connection.engine]?.supportsSchemas ?? false) : false;
 
@@ -108,12 +91,6 @@ export const ObjectBrowserPane: React.FC<Props> = ({
     window.addEventListener('click', closeMenu);
     return () => window.removeEventListener('click', closeMenu);
   }, []);
-
-  useEffect(() => {
-    if (category === 'queries') {
-      setSavedQueries(loadSavedQueries());
-    }
-  }, [category, refreshSignal]);
 
   // Load databases and objects when connection/database/schema changes
   const fetchObjects = async () => {
