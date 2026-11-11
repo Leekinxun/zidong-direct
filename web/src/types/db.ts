@@ -91,6 +91,8 @@ export interface ColumnDef {
   type: string;
   nullable: boolean;
   defaultValue?: string | null;
+  generatedExpr?: string;
+  generatedKind?: 'STORED' | 'VIRTUAL' | '';
   primaryKey: boolean;
   autoIncrement: boolean;
   comment?: string;

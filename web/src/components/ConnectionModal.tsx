@@ -38,7 +38,9 @@ export const ConnectionModal: React.FC<Props> = ({ editing, initialEngine, onClo
   const [database, setDatabase] = useState(editing?.database || '');
   const [username, setUsername] = useState(editing?.username || '');
   const [password, setPassword] = useState('');
-  const [sslMode, setSslMode] = useState(editing?.sslMode || 'disable');
+  const [sslMode, setSslMode] = useState(
+    editing?.sslMode || (defaultEngine === 'postgres' ? 'prefer' : 'disable'),
+  );
   const [trustServerCert, setTrustServerCert] = useState(editing?.trustServerCert ?? true);
   const [oracleMode, setOracleMode] = useState(editing?.oracleMode || 'service');
   const [sqlitePath, setSqlitePath] = useState(editing?.sqlitePath || '');
@@ -85,6 +87,11 @@ export const ConnectionModal: React.FC<Props> = ({ editing, initialEngine, onClo
       setPort(DEFAULT_PORTS[nextEngine]);
       if (nextEngine === 'sqlite') {
         setSshEnabled(false);
+      }
+      if (nextEngine === 'postgres' && sslMode === 'disable') {
+        setSslMode('prefer');
+      } else if (nextEngine !== 'postgres' && sslMode === 'prefer') {
+        setSslMode('disable');
       }
     }
   };
@@ -391,6 +398,7 @@ export const ConnectionModal: React.FC<Props> = ({ editing, initialEngine, onClo
                           className="w-full rounded border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm text-slate-100 outline-none focus:border-indigo-500"
                         >
                           <option value="disable">禁用 (disable)</option>
+                          <option value="prefer">优先加密，回退明文 (prefer)</option>
                           <option value="require">加密 (require)</option>
                           <option value="verify-full">严格校验证书 (verify-full)</option>
                         </select>

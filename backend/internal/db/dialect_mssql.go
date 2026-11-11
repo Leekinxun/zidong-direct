@@ -62,7 +62,9 @@ func (d *mssqlDialect) BuildDSN(cfg ConnectionConfig, targetHost string, targetP
 		q.Set("database", dbName)
 	}
 	encrypt := "disable"
-	if strings.EqualFold(cfg.SSLMode, "require") || strings.EqualFold(cfg.SSLMode, "verify-full") || strings.EqualFold(cfg.SSLMode, "true") {
+	if strings.EqualFold(cfg.SSLMode, "prefer") {
+		encrypt = "false"
+	} else if strings.EqualFold(cfg.SSLMode, "require") || strings.EqualFold(cfg.SSLMode, "verify-full") || strings.EqualFold(cfg.SSLMode, "true") {
 		encrypt = "true"
 	}
 	q.Set("encrypt", encrypt)

@@ -351,12 +351,25 @@ export const RightInfoPane: React.FC<Props> = ({
                           PK
                         </span>
                       )}
+                      {col.generatedExpr && (
+                        <span
+                          className="rounded border border-purple-700/60 bg-purple-950/90 px-1.5 py-0.5 text-[10.5px] font-semibold text-purple-300"
+                          title={`GENERATED ALWAYS AS (${col.generatedExpr}) ${col.generatedKind || 'STORED'}`}
+                        >
+                          GEN {col.generatedKind === 'VIRTUAL' ? 'VIRTUAL' : 'STORED'}
+                        </span>
+                      )}
                       {!col.nullable && (
                         <span className="rounded bg-slate-800 px-1.5 py-0.5 text-[10.5px] text-slate-400">
                           NOT NULL
                         </span>
                       )}
                     </div>
+                    {col.generatedExpr && (
+                      <div className="mt-0.5 truncate font-mono text-[11px] text-purple-300/90" title={col.generatedExpr}>
+                        = {col.generatedExpr}
+                      </div>
+                    )}
                     {col.comment && <div className="mt-0.5 truncate text-xs text-slate-500">{col.comment}</div>}
                   </div>
                   <span className="ml-2 shrink-0 font-mono text-xs text-indigo-300">{col.type}</span>

@@ -57,7 +57,7 @@ func (d *postgresDialect) BuildDSN(cfg ConnectionConfig, targetHost string, targ
 	}
 	sslMode := cfg.SSLMode
 	if sslMode == "" {
-		sslMode = "disable"
+		sslMode = "prefer"
 	}
 	u := &url.URL{
 		Scheme: "postgres",
@@ -173,8 +173,9 @@ SELECT a.attname,
        pg_catalog.format_type(a.atttypid, a.atttypmod) AS data_type,
        NOT a.attnotnull AS is_nullable,
        pg_get_expr(ad.adbin, ad.adrelid) AS default_val,
+       COALESCE(to_jsonb(a)->>'attgenerated', '') AS att_generated,
        COALESCE(pk.is_pk, false) AS is_pk,
-       (a.attidentity <> '' OR COALESCE(pg_get_expr(ad.adbin, ad.adrelid), '') LIKE 'nextval(%') AS is_auto,
+       (COALESCE(to_jsonb(a)->>'attidentity', '') <> '' OR COALESCE(pg_get_expr(ad.adbin, ad.adrelid), '') LIKE 'nextval(%') AS is_auto,
        COALESCE(col_description(c.oid, a.attnum), '') AS comment,
        a.attnum
 FROM pg_attribute a
@@ -195,13 +196,23 @@ ORDER BY a.attnum`
 	for rows.Next() {
 		var col ColumnDef
 		var defVal sql.NullString
-		if err := rows.Scan(&col.Name, &col.Type, &col.Nullable, &defVal, &col.PrimaryKey, &col.AutoIncrement, &col.Comment, &col.Ordinal); err != nil {
+		var attGenerated string
+		if err := rows.Scan(&col.Name, &col.Type, &col.Nullable, &defVal, &attGenerated, &col.PrimaryKey, &col.AutoIncrement, &col.Comment, &col.Ordinal); err != nil {
 			_ = rows.Close()
 			return ts, err
 		}
 		if defVal.Valid {
 			v := defVal.String
-			col.DefaultValue = &v
+			switch strings.ToLower(strings.TrimSpace(attGenerated)) {
+			case "s":
+				col.GeneratedExpr = v
+				col.GeneratedKind = "STORED"
+			case "v":
+				col.GeneratedExpr = v
+				col.GeneratedKind = "VIRTUAL"
+			default:
+				col.DefaultValue = &v
+			}
 		}
 		ts.Columns = append(ts.Columns, col)
 	}

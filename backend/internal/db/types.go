@@ -168,6 +168,8 @@ type ColumnDef struct {
 	Type          string  `json:"type"`
 	Nullable      bool    `json:"nullable"`
 	DefaultValue  *string `json:"defaultValue,omitempty"`
+	GeneratedExpr string  `json:"generatedExpr,omitempty"`
+	GeneratedKind string  `json:"generatedKind,omitempty"` // "STORED" | "VIRTUAL"
 	PrimaryKey    bool    `json:"primaryKey"`
 	AutoIncrement bool    `json:"autoIncrement"`
 	Comment       string  `json:"comment,omitempty"`

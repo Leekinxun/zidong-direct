@@ -63,6 +63,8 @@ func (d *mysqlDialect) BuildDSN(cfg ConnectionConfig, targetHost string, targetP
 	c.Params = map[string]string{"charset": "utf8mb4"}
 
 	switch strings.ToLower(cfg.SSLMode) {
+	case "prefer":
+		c.TLSConfig = "preferred"
 	case "require":
 		c.TLSConfig = "skip-verify"
 	case "verify-full":

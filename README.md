@@ -12,6 +12,7 @@
 [![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)](https://react.dev/)
 [![Docker](https://img.shields.io/badge/Docker-Single%20Image-2496ED?logo=docker&logoColor=white)](./Dockerfile)
 [![Win7 Compatible](https://img.shields.io/badge/Win7%20Browser-Chrome%20109%20%7C%20Firefox%20115%2B-4CAF50)](#windows-7-客户端兼容性说明)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
 [简体中文](#简体中文) · [English](#english)
 
@@ -39,7 +40,7 @@
 | 数据库引擎 | 纯 Go 协议驱动 | 默认端口 | 多 Schema 浏览 | SSH 隧道 | 在线改表 DDL | 说明 |
 | :--- | :--- | :---: | :---: | :---: | :---: | :--- |
 | **MySQL / MariaDB** | `go-sql-driver/mysql` | `3306` | - | ✅ | ✅ | 支持 UTF8MB4、多库浏览与在线表设计 |
-| **PostgreSQL** | `jackc/pgx/v5` | `5432` | ✅ | ✅ | ✅ | 支持多 Schema、`text[]` 等数组及复杂类型、SSL 模式 |
+| **PostgreSQL** | `jackc/pgx/v5` | `5432` | ✅ | ✅ | ✅ | 兼容 PG 9.5 ~ PG 18（支持 `SCRAM-SHA-256`、`prefer` SSL 自适应回退、PG 12+ `STORED` 与 PG 18 `VIRTUAL` 生成列） |
 | **SQLite 3** | `modernc.org/sqlite` | 本地文件 | - | - | ⚠️ 表重建 | 支持容器挂载浏览、浏览器上传/下载及新建 `.db`；改列自动生成事务重建表 DDL |
 | **SQL Server** | `microsoft/go-mssqldb` | `1433` | ✅ | ✅ | ✅ | 支持 Schema 浏览、TOP 分页与可选 `trustServerCert` |
 | **Oracle** | `sijms/go-ora/v2` | `1521` | ✅ | ✅ | ✅ | 纯 Go 协议直连（无需 Instant Client），支持 **Service Name** 与 **SID** |
@@ -58,8 +59,8 @@
   - 基于 CodeMirror 6：按引擎方言高亮，自动加载表名/列名智能补全。
   - 支持 `Ctrl+Enter` / `Cmd+Enter` 执行全篇或仅运行选中片段、分号拆批多语句执行、多结果集标签页展示与 SQL 执行历史本地记忆。
 - **可视化表结构设计器**
-  - 可视化配置字段名、数据类型建议、允许空、主键 (`PK`)、自增、默认值、注释、索引与外键。
-  - 支持「修改前先预览差异 DDL SQL」，确认无误后再提交执行。
+  - 可视化配置字段名、数据类型建议、允许空、主键 (`PK`)、自增、默认值、PostgreSQL 生成列 (`GENERATED ALWAYS AS (...) STORED / VIRTUAL`)、注释、索引与外键。
+  - 支持「修改前先预览差异 DDL SQL」，按实际变更项精准生成 `ALTER COLUMN` 语句，确认无误后再提交执行。
 - **SSH 隧道代理**
   - 支持 SSH 密码认证与私钥认证（含私钥口令 Passphrase），支持 SHA256 主机指纹校验，断开连接或删除连接时自动清理隧道资源。
 - **数据导入与导出**
@@ -178,7 +179,7 @@ Its layout draws inspiration from classic desktop clients like Navicat paired wi
 | Engine | Pure-Go Driver | Default Port | Multi-Schema | SSH Tunnel | Visual DDL Alter | Notes |
 | :--- | :--- | :---: | :---: | :---: | :---: | :--- |
 | **MySQL / MariaDB** | `go-sql-driver/mysql` | `3306` | - | ✅ | ✅ | UTF8MB4, multi-database browsing, visual structure design |
-| **PostgreSQL** | `jackc/pgx/v5` | `5432` | ✅ | ✅ | ✅ | Multi-schema browsing, array/complex types, SSL modes |
+| **PostgreSQL** | `jackc/pgx/v5` | `5432` | ✅ | ✅ | ✅ | Compatible with PG 9.5–18 (`SCRAM-SHA-256`, `prefer` TLS fallback, PG 12+ `STORED` & PG 18 `VIRTUAL` generated columns) |
 | **SQLite 3** | `modernc.org/sqlite` | Local file | - | - | ⚠️ Table Rebuild | Browse hosted dir, upload/download/create `.db` in UI; auto-generates transactional rebuild DDL |
 | **SQL Server** | `microsoft/go-mssqldb` | `1433` | ✅ | ✅ | ✅ | Schema browsing, paginated grid, optional `trustServerCert` |
 | **Oracle** | `sijms/go-ora/v2` | `1521` | ✅ | ✅ | ✅ | Direct wire protocol (no Instant Client), **Service Name** & **SID** |
@@ -245,3 +246,9 @@ For frontend hot-reload dev mode, run `npm run dev` inside `web/` (listens on `:
 - Tested/targeted for **Chrome 109** and **Firefox 115 ESR** (or Chromium ≥ 109 derivatives).
 - [`web/vite.config.ts`](./web/vite.config.ts) locks Vite `build.target` and `build.cssTarget` to `['chrome109', 'firefox115']`, while Tailwind CSS v3 avoids CSS Color 4 features unavailable in Chrome 109.
 - [`web/scripts/check-win7-compat.mjs`](./web/scripts/check-win7-compat.mjs) automatically validates built JS/CSS assets during `npm run build` to block unsupported syntax such as `.toSorted()`, `Object.groupBy()`, `color-mix()`, and `oklch()`.
+
+---
+
+## 📄 License
+
+Released under the [MIT License](./LICENSE).

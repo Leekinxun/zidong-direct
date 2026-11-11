@@ -139,14 +139,27 @@ func findPKIdx(cols []ColumnDef) int {
 	return 0
 }
 
+func normalizeGeneratedKind(kind string) string {
+	if strings.EqualFold(strings.TrimSpace(kind), "VIRTUAL") {
+		return "VIRTUAL"
+	}
+	return "STORED"
+}
+
 func formatColumnSpec(d Dialect, c ColumnDef, colType string, isSinglePK bool) (string, error) {
 	var parts []string
 	parts = append(parts, d.QuoteIdent(c.Name))
 
+	genExpr := strings.TrimSpace(c.GeneratedExpr)
+	isPgGenerated := d.Engine() == EnginePostgres && genExpr != ""
+
 	upperType := strings.ToUpper(colType)
 	switch d.Engine() {
 	case EnginePostgres:
-		if c.AutoIncrement && (upperType == "INT" || upperType == "INTEGER") {
+		if isPgGenerated {
+			parts = append(parts, colType)
+			parts = append(parts, fmt.Sprintf("GENERATED ALWAYS AS (%s) %s", genExpr, normalizeGeneratedKind(c.GeneratedKind)))
+		} else if c.AutoIncrement && (upperType == "INT" || upperType == "INTEGER") {
 			parts = append(parts, "SERIAL")
 		} else if c.AutoIncrement && upperType == "BIGINT" {
 			parts = append(parts, "BIGSERIAL")
@@ -167,13 +180,13 @@ func formatColumnSpec(d Dialect, c ColumnDef, colType string, isSinglePK bool) (
 	}
 
 	if !(d.Engine() == EngineSQLite && c.AutoIncrement && isSinglePK) {
-		if c.DefaultValue != nil && strings.TrimSpace(*c.DefaultValue) != "" {
+		if !isPgGenerated && c.DefaultValue != nil && strings.TrimSpace(*c.DefaultValue) != "" {
 			parts = append(parts, "DEFAULT "+formatDefaultValue(*c.DefaultValue))
 		}
 		if !c.Nullable {
 			parts = append(parts, "NOT NULL")
 		}
-		if c.AutoIncrement {
+		if !isPgGenerated && c.AutoIncrement {
 			switch d.Engine() {
 			case EngineMySQL:
 				parts = append(parts, "AUTO_INCREMENT")
@@ -270,6 +283,14 @@ func BuildDDLPreview(d Dialect, diff TableDesignDiff) (DDLPreviewResponse, error
 			} else {
 				stmts = append(stmts, fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s", tableRef, spec))
 			}
+			if d.Engine() == EnginePostgres && strings.TrimSpace(tc.Comment) != "" {
+				stmts = append(stmts, fmt.Sprintf(
+					"COMMENT ON COLUMN %s.%s IS '%s'",
+					tableRef,
+					d.QuoteIdent(tc.Name),
+					strings.ReplaceAll(tc.Comment, "'", "''"),
+				))
+			}
 			continue
 		}
 
@@ -282,12 +303,20 @@ func BuildDDLPreview(d Dialect, diff TableDesignDiff) (DDLPreviewResponse, error
 			if err != nil {
 				return DDLPreviewResponse{}, err
 			}
-			modStmts, modWarn, err := buildModifyColumnStmts(d, tableRef, tc, colType)
+			modStmts, modWarn, err := buildModifyColumnStmts(d, tableRef, oc, tc, colType)
 			if err != nil {
 				return DDLPreviewResponse{}, err
 			}
 			stmts = append(stmts, modStmts...)
 			warnings = append(warnings, modWarn...)
+		}
+		if d.Engine() == EnginePostgres && strings.TrimSpace(oc.Comment) != strings.TrimSpace(tc.Comment) {
+			stmts = append(stmts, fmt.Sprintf(
+				"COMMENT ON COLUMN %s.%s IS '%s'",
+				tableRef,
+				d.QuoteIdent(tc.Name),
+				strings.ReplaceAll(tc.Comment, "'", "''"),
+			))
 		}
 	}
 
@@ -360,7 +389,7 @@ func buildRenameColumnStmt(d Dialect, database, schema, table, oldCol, newCol st
 	return fmt.Sprintf("ALTER TABLE %s RENAME COLUMN %s TO %s", tableRef, d.QuoteIdent(oldCol), d.QuoteIdent(newCol))
 }
 
-func buildModifyColumnStmts(d Dialect, tableRef string, tc ColumnDef, colType string) ([]string, []string, error) {
+func buildModifyColumnStmts(d Dialect, tableRef string, oc, tc ColumnDef, colType string) ([]string, []string, error) {
 	switch d.Engine() {
 	case EngineMySQL:
 		spec, err := formatColumnSpec(d, tc, colType, false)
@@ -370,19 +399,66 @@ func buildModifyColumnStmts(d Dialect, tableRef string, tc ColumnDef, colType st
 		return []string{fmt.Sprintf("ALTER TABLE %s MODIFY COLUMN %s", tableRef, spec)}, nil, nil
 	case EnginePostgres:
 		var out []string
+		var warns []string
 		colQ := d.QuoteIdent(tc.Name)
-		out = append(out, fmt.Sprintf("ALTER TABLE %s ALTER COLUMN %s TYPE %s", tableRef, colQ, colType))
-		if tc.Nullable {
-			out = append(out, fmt.Sprintf("ALTER TABLE %s ALTER COLUMN %s DROP NOT NULL", tableRef, colQ))
-		} else {
-			out = append(out, fmt.Sprintf("ALTER TABLE %s ALTER COLUMN %s SET NOT NULL", tableRef, colQ))
+
+		origGen := strings.TrimSpace(oc.GeneratedExpr)
+		targetGen := strings.TrimSpace(tc.GeneratedExpr)
+		origKind := normalizeGeneratedKind(oc.GeneratedKind)
+		targetKind := normalizeGeneratedKind(tc.GeneratedKind)
+
+		// If converting a normal column into a generated column, or switching STORED <-> VIRTUAL,
+		// PostgreSQL requires dropping and re-adding the column.
+		if (origGen == "" && targetGen != "") || (origGen != "" && targetGen != "" && origKind != targetKind) {
+			spec, err := formatColumnSpec(d, tc, colType, false)
+			if err != nil {
+				return nil, nil, err
+			}
+			out = append(out, fmt.Sprintf("ALTER TABLE %s DROP COLUMN %s", tableRef, colQ))
+			out = append(out, fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s", tableRef, spec))
+			warns = append(warns, fmt.Sprintf("PostgreSQL 不支持原地将列 %s 切换为生成列或更改 STORED/VIRTUAL 模式，已生成 DROP + ADD COLUMN 语句（请确认无依赖视图）。", colQ))
+			return out, warns, nil
 		}
-		if tc.DefaultValue != nil && strings.TrimSpace(*tc.DefaultValue) != "" {
-			out = append(out, fmt.Sprintf("ALTER TABLE %s ALTER COLUMN %s SET DEFAULT %s", tableRef, colQ, formatDefaultValue(*tc.DefaultValue)))
-		} else {
-			out = append(out, fmt.Sprintf("ALTER TABLE %s ALTER COLUMN %s DROP DEFAULT", tableRef, colQ))
+
+		if !strings.EqualFold(strings.TrimSpace(oc.Type), strings.TrimSpace(tc.Type)) {
+			out = append(out, fmt.Sprintf("ALTER TABLE %s ALTER COLUMN %s TYPE %s", tableRef, colQ, colType))
 		}
-		return out, nil, nil
+		if oc.Nullable != tc.Nullable {
+			if tc.Nullable {
+				out = append(out, fmt.Sprintf("ALTER TABLE %s ALTER COLUMN %s DROP NOT NULL", tableRef, colQ))
+			} else {
+				out = append(out, fmt.Sprintf("ALTER TABLE %s ALTER COLUMN %s SET NOT NULL", tableRef, colQ))
+			}
+		}
+
+		if origGen != "" && targetGen == "" {
+			out = append(out, fmt.Sprintf("ALTER TABLE %s ALTER COLUMN %s DROP EXPRESSION", tableRef, colQ))
+			if tc.DefaultValue != nil && strings.TrimSpace(*tc.DefaultValue) != "" {
+				out = append(out, fmt.Sprintf("ALTER TABLE %s ALTER COLUMN %s SET DEFAULT %s", tableRef, colQ, formatDefaultValue(*tc.DefaultValue)))
+			}
+		} else if origGen != "" && targetGen != "" {
+			if origGen != targetGen {
+				out = append(out, fmt.Sprintf("ALTER TABLE %s ALTER COLUMN %s SET EXPRESSION AS (%s)", tableRef, colQ, targetGen))
+				warns = append(warns, fmt.Sprintf("列 %s 使用了 SET EXPRESSION AS (...) 语法（需 PostgreSQL 17+）；若为 PG 12~16，请先删除该列再重新添加。", colQ))
+			}
+		} else {
+			origDef := ""
+			if oc.DefaultValue != nil {
+				origDef = strings.TrimSpace(*oc.DefaultValue)
+			}
+			targetDef := ""
+			if tc.DefaultValue != nil {
+				targetDef = strings.TrimSpace(*tc.DefaultValue)
+			}
+			if origDef != targetDef {
+				if targetDef != "" {
+					out = append(out, fmt.Sprintf("ALTER TABLE %s ALTER COLUMN %s SET DEFAULT %s", tableRef, colQ, formatDefaultValue(targetDef)))
+				} else {
+					out = append(out, fmt.Sprintf("ALTER TABLE %s ALTER COLUMN %s DROP DEFAULT", tableRef, colQ))
+				}
+			}
+		}
+		return out, warns, nil
 	case EngineSQLServer:
 		nullKW := "NOT NULL"
 		if tc.Nullable {
@@ -490,6 +566,14 @@ func columnDefinitionChanged(a, b ColumnDef) bool {
 		return true
 	}
 	if a.Nullable != b.Nullable || a.PrimaryKey != b.PrimaryKey || a.AutoIncrement != b.AutoIncrement {
+		return true
+	}
+	aGen := strings.TrimSpace(a.GeneratedExpr)
+	bGen := strings.TrimSpace(b.GeneratedExpr)
+	if aGen != bGen {
+		return true
+	}
+	if aGen != "" && normalizeGeneratedKind(a.GeneratedKind) != normalizeGeneratedKind(b.GeneratedKind) {
 		return true
 	}
 	aDef := ""

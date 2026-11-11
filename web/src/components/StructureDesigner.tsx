@@ -105,7 +105,17 @@ export const StructureDesigner: React.FC<Props> = ({
     database,
     schema,
     table: tableName.trim(),
-    columns: columns.map((c, idx) => ({ ...c, ordinal: idx + 1 })),
+    columns: columns.map((c, idx) => {
+      const genExpr = (c.generatedExpr || '').trim();
+      const isGen = engine === 'postgres' && Boolean(c.generatedKind) && genExpr !== '';
+      return {
+        ...c,
+        defaultValue: isGen ? null : c.defaultValue,
+        generatedExpr: isGen ? genExpr : undefined,
+        generatedKind: isGen ? (c.generatedKind === 'VIRTUAL' ? 'VIRTUAL' : 'STORED') : undefined,
+        ordinal: idx + 1,
+      };
+    }),
     indexes,
     foreignKeys,
   });
@@ -350,7 +360,9 @@ export const StructureDesigner: React.FC<Props> = ({
                   <th className="w-20 border border-slate-800 px-2.5 py-2.5 text-center">允许空</th>
                   <th className="w-20 border border-slate-800 px-2.5 py-2.5 text-center">主键</th>
                   <th className="w-20 border border-slate-800 px-2.5 py-2.5 text-center">自增</th>
-                  <th className="border border-slate-800 px-3 py-2.5">默认值</th>
+                  <th className="border border-slate-800 px-3 py-2.5">
+                    {engine === 'postgres' ? '默认值 / 生成列 (Generated)' : '默认值'}
+                  </th>
                   <th className="border border-slate-800 px-3 py-2.5">注释</th>
                   <th className="w-14 border border-slate-800 px-2.5 py-2.5 text-center">操作</th>
                 </tr>
@@ -427,6 +439,7 @@ export const StructureDesigner: React.FC<Props> = ({
                     <td className="border border-slate-800 p-1.5 text-center">
                       <input
                         type="checkbox"
+                        disabled={Boolean(col.generatedKind)}
                         checked={col.autoIncrement}
                         onChange={(e) =>
                           setColumns((prev) =>
@@ -436,21 +449,99 @@ export const StructureDesigner: React.FC<Props> = ({
                       />
                     </td>
                     <td className="border border-slate-800 p-1.5">
-                      <input
-                        type="text"
-                        placeholder="无"
-                        value={col.defaultValue ?? ''}
-                        onChange={(e) =>
-                          setColumns((prev) =>
-                            prev.map((c, i) =>
-                              i === idx
-                                ? { ...c, defaultValue: e.target.value === '' ? null : e.target.value }
-                                : c,
-                            ),
-                          )
-                        }
-                        className="w-full rounded bg-slate-900 px-2.5 py-1.5 font-mono text-[13.5px] text-slate-100 outline-none focus:ring-1 focus:ring-indigo-500"
-                      />
+                      {engine === 'postgres' ? (
+                        <div className="flex items-center gap-1.5">
+                          <select
+                            value={col.generatedKind || (col.generatedExpr ? 'STORED' : '')}
+                            onChange={(e) => {
+                              const nextKind = e.target.value as '' | 'STORED' | 'VIRTUAL';
+                              setColumns((prev) =>
+                                prev.map((c, i) => {
+                                  if (i !== idx) return c;
+                                  if (!nextKind) {
+                                    return {
+                                      ...c,
+                                      generatedKind: '',
+                                      generatedExpr: '',
+                                    };
+                                  }
+                                  return {
+                                    ...c,
+                                    generatedKind: nextKind,
+                                    generatedExpr: c.generatedExpr || c.defaultValue || '',
+                                    defaultValue: null,
+                                    autoIncrement: false,
+                                  };
+                                }),
+                              );
+                            }}
+                            className={`shrink-0 rounded border px-2 py-1.5 text-xs outline-none ${
+                              col.generatedKind || col.generatedExpr
+                                ? 'border-purple-700/70 bg-purple-950/70 font-medium text-purple-200'
+                                : 'border-slate-700 bg-slate-900 text-slate-300'
+                            }`}
+                            title="切换普通默认值或 PostgreSQL 12+ 生成列 (STORED / PG18 VIRTUAL)"
+                          >
+                            <option value="">DEFAULT</option>
+                            <option value="STORED">GEN STORED</option>
+                            <option value="VIRTUAL">GEN VIRTUAL (PG18)</option>
+                          </select>
+                          {col.generatedKind || col.generatedExpr ? (
+                            <input
+                              type="text"
+                              placeholder="生成表达式，如: price * qty 或 lower(email)"
+                              value={col.generatedExpr ?? ''}
+                              onChange={(e) =>
+                                setColumns((prev) =>
+                                  prev.map((c, i) =>
+                                    i === idx
+                                      ? {
+                                          ...c,
+                                          generatedKind: c.generatedKind || 'STORED',
+                                          generatedExpr: e.target.value,
+                                          defaultValue: null,
+                                        }
+                                      : c,
+                                  ),
+                                )
+                              }
+                              className="w-full rounded border border-purple-800/60 bg-purple-950/30 px-2.5 py-1.5 font-mono text-[13.5px] text-purple-100 outline-none focus:ring-1 focus:ring-purple-500"
+                            />
+                          ) : (
+                            <input
+                              type="text"
+                              placeholder="无"
+                              value={col.defaultValue ?? ''}
+                              onChange={(e) =>
+                                setColumns((prev) =>
+                                  prev.map((c, i) =>
+                                    i === idx
+                                      ? { ...c, defaultValue: e.target.value === '' ? null : e.target.value }
+                                      : c,
+                                  ),
+                                )
+                              }
+                              className="w-full rounded bg-slate-900 px-2.5 py-1.5 font-mono text-[13.5px] text-slate-100 outline-none focus:ring-1 focus:ring-indigo-500"
+                            />
+                          )}
+                        </div>
+                      ) : (
+                        <input
+                          type="text"
+                          placeholder="无"
+                          value={col.defaultValue ?? ''}
+                          onChange={(e) =>
+                            setColumns((prev) =>
+                              prev.map((c, i) =>
+                                i === idx
+                                  ? { ...c, defaultValue: e.target.value === '' ? null : e.target.value }
+                                  : c,
+                              ),
+                            )
+                          }
+                          className="w-full rounded bg-slate-900 px-2.5 py-1.5 font-mono text-[13.5px] text-slate-100 outline-none focus:ring-1 focus:ring-indigo-500"
+                        />
+                      )}
                     </td>
                     <td className="border border-slate-800 p-1.5">
                       <input
