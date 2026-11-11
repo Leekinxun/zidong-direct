@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="zd-bg" x1="6" y1="4" x2="58" y2="60" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#9333EA" />
+      <stop offset="48%" stop-color="#5E5CE6" />
+      <stop offset="100%" stop-color="#0A84FF" />
+    </linearGradient>
+    <linearGradient id="zd-shine" x1="32" y1="2" x2="32" y2="34" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.32" />
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0" />
+    </linearGradient>
+    <linearGradient id="zd-bolt" x1="26" y1="18" x2="46" y2="48" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FDE047" />
+      <stop offset="100%" stop-color="#38BDF8" />
+    </linearGradient>
+  </defs>
+
+  <!-- Apple Squircle Base -->
+  <rect x="3" y="3" width="58" height="58" rx="14" fill="url(#zd-bg)" />
+  <rect x="3.75" y="3.75" width="56.5" height="56.5" rx="13.25" stroke="url(#zd-shine)" stroke-width="1.5" />
+
+  <!-- Database Cylinder Top Disc -->
+  <ellipse cx="29" cy="19" rx="14.5" ry="5.5" fill="#FFFFFF" fill-opacity="0.95" />
+
+  <!-- Database Middle Layer -->
+  <path
+    d="M14.5 25.5C14.5 28.54 20.99 31 29 31C37.01 31 43.5 28.54 43.5 25.5V32.5C43.5 35.54 37.01 38 29 38C20.99 38 14.5 35.54 14.5 32.5V25.5Z"
+    fill="#FFFFFF"
+    fill-opacity="0.82"
+  />
+
+  <!-- Database Bottom Layer -->
+  <path
+    d="M14.5 36.5C14.5 39.54 20.99 42 29 42C37.01 42 43.5 39.54 43.5 36.5V43.5C43.5 46.54 37.01 49 29 49C20.99 49 14.5 46.54 14.5 43.5V36.5Z"
+    fill="#FFFFFF"
+    fill-opacity="0.68"
+  />
+
+  <!-- Direct Link Badge (紫东直连 Lightning / Node Link) -->
+  <circle cx="44.5" cy="42.5" r="11.5" fill="#161618" fill-opacity="0.86" />
+  <circle cx="44.5" cy="42.5" r="10.5" stroke="#A78BFA" stroke-opacity="0.55" stroke-width="1.2" />
+  <path
+    d="M45.8 34.5L39.2 43.2H44.3L43.1 50.5L49.8 41.8H44.7L45.8 34.5Z"
+    fill="url(#zd-bolt)"
+  />
+</svg>

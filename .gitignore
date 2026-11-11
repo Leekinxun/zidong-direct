@@ -1,0 +1,12 @@
+data/
+web/node_modules/
+web/dist/
+backend/webdb-studio
+backend/server
+*.db
+*.sqlite
+*.sqlite3
+*.log
+.env
+.env.*
+.DS_Store

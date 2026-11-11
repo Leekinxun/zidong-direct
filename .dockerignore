@@ -1,0 +1,7 @@
+.git
+data
+web/node_modules
+web/dist
+backend/webdb-studio
+*.log
+.DS_Store

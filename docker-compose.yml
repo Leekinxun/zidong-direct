@@ -1,0 +1,25 @@
+services:
+  webdb-studio:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: webdb-studio
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      PORT: "8080"
+      DATA_DIR: "/data"
+      SQLITE_DIR: "/data/sqlite"
+      # 建议部署到局域网/公网前修改管理员密码与加密密钥
+      APP_ADMIN_USER: "admin"
+      APP_ADMIN_PASSWORD: "changeme123"
+      # 留空时会自动在 /data/meta/.master.key 生成持久化随机密钥
+      APP_SECRET_KEY: ""
+      # 如仅在本机受信任环境测试且无需登录，可设为 "true"
+      APP_AUTH_DISABLED: "false"
+      MAX_QUERY_ROWS: "1000"
+      QUERY_TIMEOUT_SECONDS: "60"
+    volumes:
+      # 持久化保存加密后的连接配置、主密钥与 SQLite 数据库文件
+      - ./data:/data
