@@ -65,7 +65,7 @@
   - 从数据库、表或视图的「查看注释」打开属性面板。数据库级注释支持 PostgreSQL、MariaDB 10.5+ 和配置了 `MS_Description` 的 SQL Server。
 - **SSH 隧道代理**
   - 支持 SSH 密码认证与私钥认证（含私钥口令 Passphrase），支持 SHA256 主机指纹校验，断开连接或删除连接时自动清理隧道资源。
-  - 桌面版可从「SSH 终端」选择启用了 SSH 的连接，打开交互式终端。选中内容后用 `Ctrl+Shift+C` 复制，用 `Ctrl+Shift+V` 粘贴。多行粘贴需要确认，`Ctrl+C` 向远端发送中断。
+  - 桌面版可从「SSH 终端」直接填写服务器地址和认证信息，或复用已保存的 SSH 设置。选中内容后用 `Ctrl+Shift+C` 复制，用 `Ctrl+Shift+V` 粘贴。多行粘贴需要确认，`Ctrl+C` 向远端发送中断。
 - **数据导入与导出**
   - **导出**：支持导出表数据（含当前筛选与排序）或任意 SQL 查询结果为 `CSV`（默认可带 UTF-8 BOM 防止 Win7 Excel 中文乱码）、`JSON` 或 `SQL INSERT` 脚本。
   - **导入**支持 CSV、TXT、TSV、定宽文本、JSON、JSON Lines、XML、Excel（XLS、XLSX、XLSM）、ODS、DBF、平面 Parquet 和本地 SQL 脚本。导入向导可预览字段、选择工作表，并按列名、位置或手动建立映射。

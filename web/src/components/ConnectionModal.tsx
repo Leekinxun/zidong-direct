@@ -3,6 +3,7 @@ import { CheckCircle2, Download, FolderOpen, KeyRound, Loader2, Plus, Shield, Up
 import { api, ApiError } from '../api/client';
 import { isDesktop } from '../preferences';
 import type { ConnectionInput, ConnectionView, EngineType, SQLiteFileEntry } from '../types/db';
+import { PasswordField } from './PasswordField';
 
 interface Props {
   editing: ConnectionView | null;
@@ -422,18 +423,13 @@ export const ConnectionModal: React.FC<Props> = ({ editing, initialEngine, onClo
                         className="w-full rounded border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm text-slate-100 outline-none focus:border-indigo-500"
                       />
                     </div>
-                    <div>
-                      <label className="mb-1 block text-xs text-slate-300">
-                        密码 {editing?.hasPassword ? '（留空则保留原密码）' : ''}
-                      </label>
-                      <input
-                        type="password"
-                        placeholder={editing?.hasPassword ? '••••••••' : ''}
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        className="w-full rounded border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm text-slate-100 outline-none focus:border-indigo-500"
-                      />
-                    </div>
+                    <PasswordField
+                      label="数据库密码"
+                      hint={editing?.hasPassword ? '（留空则保留原密码）' : undefined}
+                      saved={editing?.hasPassword}
+                      value={password}
+                      onChange={setPassword}
+                    />
                   </div>
 
                   {(engine === 'sqlserver' || engine === 'oracle') && (
@@ -512,18 +508,13 @@ export const ConnectionModal: React.FC<Props> = ({ editing, initialEngine, onClo
                   </div>
 
                   {sshAuthType === 'password' ? (
-                    <div>
-                      <label className="mb-1 block text-xs text-slate-300">
-                        SSH 密码 {editing?.ssh.hasPassword ? '（留空则保留原密码）' : ''}
-                      </label>
-                      <input
-                        type="password"
-                        placeholder={editing?.ssh.hasPassword ? '••••••••' : ''}
-                        value={sshPassword}
-                        onChange={(e) => setSshPassword(e.target.value)}
-                        className="w-full rounded border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm text-slate-100 outline-none focus:border-indigo-500"
-                      />
-                    </div>
+                    <PasswordField
+                      label="SSH 密码"
+                      hint={editing?.ssh.hasPassword ? '（留空则保留原密码）' : undefined}
+                      saved={editing?.ssh.hasPassword}
+                      value={sshPassword}
+                      onChange={setSshPassword}
+                    />
                   ) : (
                     <>
                       <div>
@@ -538,18 +529,13 @@ export const ConnectionModal: React.FC<Props> = ({ editing, initialEngine, onClo
                           className="w-full rounded border border-slate-700 bg-slate-800 px-3 py-1.5 font-mono text-xs text-slate-100 outline-none focus:border-indigo-500"
                         />
                       </div>
-                      <div>
-                        <label className="mb-1 block text-xs text-slate-300">
-                          私钥口令 Passphrase（若无则留空）
-                        </label>
-                        <input
-                          type="password"
-                          placeholder={editing?.ssh.hasPassphrase ? '••••••••' : ''}
-                          value={sshPassphrase}
-                          onChange={(e) => setSshPassphrase(e.target.value)}
-                          className="w-full rounded border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm text-slate-100 outline-none focus:border-indigo-500"
-                        />
-                      </div>
+                      <PasswordField
+                        label="私钥口令"
+                        hint=" Passphrase（若无则留空）"
+                        saved={editing?.ssh.hasPassphrase}
+                        value={sshPassphrase}
+                        onChange={setSshPassphrase}
+                      />
                     </>
                   )}
 

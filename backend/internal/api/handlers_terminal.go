@@ -6,15 +6,20 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/netip"
+	"strings"
 	"sync"
 	"time"
+	"unicode"
 
+	"web-db-client/internal/db"
 	"web-db-client/internal/ssh"
 )
 
 const (
 	maxTerminalSessions = 4
 	terminalAttachTTL   = 15 * time.Second
+	maxTerminalOpenBody = 64 * 1024
 )
 
 type terminalSession struct {
@@ -109,22 +114,68 @@ type terminalDimensions struct {
 	Cols int `json:"cols"`
 }
 
+func normalizeDirectTerminalSSH(cfg *db.SSHConfig) error {
+	cfg.Host = strings.TrimSpace(cfg.Host)
+	cfg.Username = strings.TrimSpace(cfg.Username)
+	if cfg.Host == "" || len(cfg.Host) > 255 || strings.ContainsAny(cfg.Host, "/\\") ||
+		strings.IndexFunc(cfg.Host, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsControl(r) }) >= 0 {
+		return errors.New("请输入有效的 SSH 主机地址")
+	}
+	if strings.HasPrefix(cfg.Host, "[") && strings.HasSuffix(cfg.Host, "]") {
+		cfg.Host = cfg.Host[1 : len(cfg.Host)-1]
+		if !strings.Contains(cfg.Host, ":") {
+			return errors.New("请输入有效的 SSH 主机地址")
+		}
+	}
+	if strings.Contains(cfg.Host, ":") {
+		if _, err := netip.ParseAddr(cfg.Host); err != nil {
+			return errors.New("请将 SSH 主机和端口分开填写")
+		}
+	} else if strings.ContainsAny(cfg.Host, "[]") {
+		return errors.New("请输入有效的 SSH 主机地址")
+	}
+	if cfg.Port < 0 || cfg.Port > 65535 {
+		return errors.New("SSH 端口必须介于 1 和 65535 之间")
+	}
+	if cfg.Username == "" || len(cfg.Username) > 255 {
+		return errors.New("请输入有效的 SSH 用户名")
+	}
+	if cfg.AuthType != "password" && cfg.AuthType != "privateKey" {
+		return errors.New("请选择 SSH 密码或私钥认证")
+	}
+	return nil
+}
+
 func (s *Server) handleOpenTerminal(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		ConnectionID string `json:"connectionId"`
+		ConnectionID string        `json:"connectionId"`
+		SSH          *db.SSHConfig `json:"ssh"`
 		terminalDimensions
 	}
-	if !decodeJSONBody(w, r, 4096, &req) {
+	if !decodeJSONBody(w, r, maxTerminalOpenBody, &req) {
 		return
 	}
-	conn, err := s.store.Get(req.ConnectionID)
-	if err != nil {
-		writeError(w, http.StatusNotFound, "connection_not_found", "找不到所选连接")
+	if (req.ConnectionID != "") == (req.SSH != nil) {
+		writeError(w, http.StatusBadRequest, "invalid_terminal_source", "请选择已保存的连接或填写 SSH 服务器信息")
 		return
 	}
-	if !conn.SSH.Enabled {
-		writeError(w, http.StatusBadRequest, "ssh_required", "请在所选连接中启用 SSH 并保存设置")
-		return
+	cfg := req.SSH
+	if cfg != nil {
+		if err := normalizeDirectTerminalSSH(cfg); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid_ssh_config", err.Error())
+			return
+		}
+	} else {
+		conn, err := s.store.Get(req.ConnectionID)
+		if err != nil {
+			writeError(w, http.StatusNotFound, "connection_not_found", "找不到所选连接")
+			return
+		}
+		if !conn.SSH.Enabled {
+			writeError(w, http.StatusBadRequest, "ssh_required", "请在所选连接中启用 SSH 并保存设置")
+			return
+		}
+		cfg = &conn.SSH
 	}
 	var token [16]byte
 	if _, err := rand.Read(token[:]); err != nil {
@@ -143,15 +194,15 @@ func (s *Server) handleOpenTerminal(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 	terminal, err := ssh.OpenTerminal(r.Context(), ssh.Spec{
-		Host:                  conn.SSH.Host,
-		Port:                  conn.SSH.Port,
-		Username:              conn.SSH.Username,
-		AuthType:              conn.SSH.AuthType,
-		Password:              conn.SSH.Password,
-		PrivateKey:            conn.SSH.PrivateKey,
-		Passphrase:            conn.SSH.Passphrase,
-		HostKeyFingerprint:    conn.SSH.HostKeyFingerprint,
-		InsecureIgnoreHostKey: conn.SSH.InsecureIgnoreHostKey,
+		Host:                  cfg.Host,
+		Port:                  cfg.Port,
+		Username:              cfg.Username,
+		AuthType:              cfg.AuthType,
+		Password:              cfg.Password,
+		PrivateKey:            cfg.PrivateKey,
+		Passphrase:            cfg.Passphrase,
+		HostKeyFingerprint:    cfg.HostKeyFingerprint,
+		InsecureIgnoreHostKey: cfg.InsecureIgnoreHostKey,
 	}, req.Rows, req.Cols)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "terminal_connect_failed", "无法打开 SSH 终端："+err.Error())

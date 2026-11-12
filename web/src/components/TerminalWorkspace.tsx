@@ -4,7 +4,8 @@ import { FitAddon } from '@xterm/addon-fit';
 import { Terminal } from '@xterm/xterm';
 import '@xterm/xterm/css/xterm.css';
 import type { ConnectionView } from '../types/db';
-import { TerminalSession } from './TerminalSession';
+import { DirectSSHForm } from './DirectSSHForm';
+import { TerminalSession, type TerminalTarget } from './TerminalSession';
 
 interface Props {
   connections: ConnectionView[];
@@ -20,7 +21,9 @@ export function TerminalWorkspace({ connections, initialConnectionId, onClose }:
   const [connectionId, setConnectionId] = useState(() => sshConnections.some(
     (connection) => connection.id === initialConnectionId,
   ) ? initialConnectionId! : sshConnections[0]?.id ?? '');
+  const [source, setSource] = useState<'direct' | 'saved'>('direct');
   const [status, setStatus] = useState<'idle' | 'connecting' | 'connected'>('idle');
+  const [destination, setDestination] = useState<{ label: string; unverified: boolean } | null>(null);
   const [notice, setNotice] = useState('');
   const [pendingPaste, setPendingPaste] = useState<string | null>(null);
   const viewport = useRef<HTMLDivElement | null>(null);
@@ -108,12 +111,13 @@ export function TerminalWorkspace({ connections, initialConnectionId, onClose }:
     };
   }, []);
 
-  const connect = () => {
+  const connect = (target: TerminalTarget, label: string, unverified: boolean) => {
     const terminal = terminalRef.current;
-    if (!selected || !terminal || sessionRef.current) return;
+    if (!terminal || sessionRef.current) return;
     terminal.reset();
     terminal.options.disableStdin = true;
     setStatus('connecting');
+    setDestination({ label, unverified });
     setNotice('');
     setPendingPaste(null);
     const session = new TerminalSession((error) => {
@@ -125,7 +129,7 @@ export function TerminalWorkspace({ connections, initialConnectionId, onClose }:
       setNotice(error || 'SSH 会话已结束');
     });
     sessionRef.current = session;
-    void session.connect(selected.id, terminal, () => {
+    void session.connect(target, terminal, () => {
       terminal.options.disableStdin = false;
       session.resize({ rows: terminal.rows, cols: terminal.cols });
       setStatus('connected');
@@ -149,13 +153,20 @@ export function TerminalWorkspace({ connections, initialConnectionId, onClose }:
     terminal?.focus();
   };
 
+  const directFormVisible = source === 'direct' && status === 'idle';
+  const showVerificationWarning = status === 'idle'
+    ? source === 'saved' && selected?.ssh.insecureIgnoreHostKey && !selected.ssh.hostKeyFingerprint
+    : destination?.unverified;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
       <section
         role="dialog"
         aria-modal="true"
         aria-labelledby="ssh-terminal-title"
-        className="flex h-[min(80vh,760px)] w-full max-w-6xl flex-col overflow-hidden rounded-xl border border-slate-700 bg-slate-900 shadow-2xl"
+        className={`flex w-full flex-col overflow-hidden rounded-xl border border-slate-700 bg-slate-900 shadow-2xl ${directFormVisible
+          ? 'max-h-[min(80vh,760px)] max-w-2xl'
+          : 'h-[min(80vh,760px)] max-w-6xl'}`}
       >
         <header className="flex items-center gap-2 border-b border-slate-800 px-4 py-3">
           <TerminalSquare className="h-4 w-4 text-indigo-300" aria-hidden="true" />
@@ -166,34 +177,69 @@ export function TerminalWorkspace({ connections, initialConnectionId, onClose }:
         </header>
         <div className="flex flex-wrap items-center gap-2 border-b border-slate-800 px-4 py-2 text-xs">
           <select
-            aria-label="SSH 连接"
-            value={connectionId}
-            disabled={status !== 'idle' || sshConnections.length === 0}
-            onChange={(event) => setConnectionId(event.target.value)}
+            aria-label="SSH 连接方式"
+            value={source}
+            disabled={status !== 'idle'}
+            onChange={(event) => {
+              setSource(event.target.value === 'saved' ? 'saved' : 'direct');
+              setNotice('');
+            }}
             className="max-w-sm rounded border border-slate-700 bg-slate-800 px-2 py-1.5 text-slate-100"
           >
-            {sshConnections.length === 0 && <option value="">请先保存一个启用 SSH 的数据库连接</option>}
-            {sshConnections.map((connection) => (
-              <option key={connection.id} value={connection.id}>
-                {connection.name} · {connection.ssh.username}@{connection.ssh.host}:{connection.ssh.port || 22}
-              </option>
-            ))}
+            <option value="direct">直接连接服务器</option>
+            <option value="saved" disabled={sshConnections.length === 0}>使用已保存的 SSH 设置</option>
           </select>
-          {status === 'idle' ? (
-            <button type="button" disabled={!selected} onClick={connect} className="rounded bg-indigo-600 px-3 py-1.5 font-medium text-white hover:bg-indigo-500 disabled:opacity-50">
-              连接
-            </button>
-          ) : (
+          {status === 'idle' && source === 'saved' && (
+            <>
+              <select
+                aria-label="已保存的 SSH 连接"
+                value={connectionId}
+                onChange={(event) => setConnectionId(event.target.value)}
+                className="max-w-sm rounded border border-slate-700 bg-slate-800 px-2 py-1.5 text-slate-100"
+              >
+                {sshConnections.map((connection) => (
+                  <option key={connection.id} value={connection.id}>
+                    {connection.name} · {connection.ssh.username}@{connection.ssh.host}:{connection.ssh.port || 22}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                disabled={!selected}
+                onClick={() => {
+                  if (!selected) return;
+                  connect(
+                    { connectionId: selected.id },
+                    `${selected.ssh.username}@${selected.ssh.host}:${selected.ssh.port || 22}`,
+                    selected.ssh.insecureIgnoreHostKey && !selected.ssh.hostKeyFingerprint,
+                  );
+                }}
+                className="rounded bg-indigo-600 px-3 py-1.5 font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+              >
+                连接
+              </button>
+            </>
+          )}
+          {status !== 'idle' && (
             <button type="button" onClick={disconnect} className="rounded bg-slate-700 px-3 py-1.5 font-medium text-white hover:bg-slate-600">
               {status === 'connecting' ? '取消' : '断开'}
             </button>
           )}
+          {status !== 'idle' && <span className="max-w-xs truncate text-slate-300" title={destination?.label}>{destination?.label}</span>}
           {status === 'connecting' && <Loader2 aria-label="正在连接" className="h-4 w-4 animate-spin text-indigo-300" />}
-          {selected?.ssh.insecureIgnoreHostKey && !selected.ssh.hostKeyFingerprint && (
+          {showVerificationWarning && (
             <span className="text-amber-300">此连接跳过主机指纹验证</span>
           )}
         </div>
-        <div className="min-h-0 flex-1 overflow-hidden bg-[#10141c] p-3">
+        <DirectSSHForm
+          visible={directFormVisible}
+          onConnect={(ssh) => connect(
+            { ssh },
+            `${ssh.username}@${ssh.host}:${ssh.port || 22}`,
+            ssh.insecureIgnoreHostKey && !ssh.hostKeyFingerprint,
+          )}
+        />
+        <div className={directFormVisible ? 'hidden' : 'min-h-0 flex-1 overflow-hidden bg-[#10141c] p-3'}>
           <div ref={viewport} className="h-full w-full" aria-label="终端输入与输出" />
         </div>
         {pendingPaste !== null && (

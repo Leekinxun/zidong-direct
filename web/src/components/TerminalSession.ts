@@ -1,9 +1,13 @@
 import type { Terminal } from '@xterm/xterm';
+import type { SSHInput } from '../types/db';
 
 export interface TerminalSize {
   rows: number;
   cols: number;
 }
+
+export type TerminalSSHSettings = Omit<SSHInput, 'enabled'>;
+export type TerminalTarget = { connectionId: string } | { ssh: TerminalSSHSettings };
 
 const endpoint = '/api/terminal/sessions';
 const maxInputBytes = 128 * 1024;
@@ -42,13 +46,13 @@ export class TerminalSession {
 
   constructor(private readonly onEnd: (error?: string) => void) {}
 
-  async connect(connectionId: string, terminal: Terminal, onReady: () => void) {
+  async connect(target: TerminalTarget, terminal: Terminal, onReady: () => void) {
     const { signal } = this.abort;
     try {
       const response = await requireOK(await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ connectionId, rows: terminal.rows, cols: terminal.cols }),
+        body: JSON.stringify({ ...target, rows: terminal.rows, cols: terminal.cols }),
         signal,
       }));
       const { sessionId } = await response.json() as { sessionId: string };
