@@ -306,6 +306,17 @@ func (s *ConnectionStore) Get(id string) (db.ConnectionConfig, error) {
 	return s.decryptConnection(item)
 }
 
+func (s *ConnectionStore) ValidateCredentials() error {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, item := range s.connections {
+		if _, err := s.decryptConnection(item); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (s *ConnectionStore) Create(in db.ConnectionInput) (db.ConnectionView, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

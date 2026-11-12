@@ -1,14 +1,20 @@
 import React, { useEffect, useState } from 'react';
-import { CheckCircle2, Download, FolderOpen, KeyRound, Loader2, Plus, Shield, Upload, X } from 'lucide-react';
+import { CheckCircle2, Download, FolderOpen, KeyRound, Loader2, Plus, Server, Shield, TerminalSquare, Upload, X } from 'lucide-react';
 import { api, ApiError } from '../api/client';
-import type { ConnectionInput, ConnectionView, EngineType, SQLiteFileEntry } from '../types/db';
+import type { ConnectionInput, ConnectionView, EngineType, SQLiteFileEntry, SSHHostSaveInput } from '../types/db';
+import { PasswordField } from './PasswordField';
+import { testTerminalConnection, type TerminalSSHSettings } from './TerminalSession';
 
 interface Props {
   editing: ConnectionView | null;
   initialEngine?: EngineType;
   onClose: () => void;
   onSaved: (conn: ConnectionView) => void;
+  onOpenSSHTerminal?: (settings: TerminalSSHSettings) => void;
+  onSaveSSHHost?: (input: SSHHostSaveInput) => Promise<void>;
 }
+
+type ConnectionTab = 'general' | 'ssh';
 
 const DEFAULT_PORTS: Record<EngineType, number> = {
   mysql: 3306,
@@ -28,9 +34,16 @@ const ENGINE_LABELS: Record<EngineType, string> = {
   dameng: '达梦数据库 (DM8)',
 };
 
-export const ConnectionModal: React.FC<Props> = ({ editing, initialEngine, onClose, onSaved }) => {
+export const ConnectionModal: React.FC<Props> = ({
+  editing,
+  initialEngine,
+  onClose,
+  onSaved,
+  onOpenSSHTerminal,
+  onSaveSSHHost,
+}) => {
   const defaultEngine = editing?.engine || initialEngine || 'mysql';
-  const [tab, setTab] = useState<'general' | 'ssh'>('general');
+  const [tab, setTab] = useState<ConnectionTab>('general');
   const [engine, setEngine] = useState<EngineType>(defaultEngine);
   const [name, setName] = useState(editing?.name || '');
   const [host, setHost] = useState(editing?.host || '127.0.0.1');
@@ -61,10 +74,12 @@ export const ConnectionModal: React.FC<Props> = ({ editing, initialEngine, onClo
   const [sqliteFiles, setSqliteFiles] = useState<SQLiteFileEntry[]>([]);
   const [newSqliteName, setNewSqliteName] = useState('');
 
-  const [testing, setTesting] = useState(false);
+  const [testingTab, setTestingTab] = useState<ConnectionTab | null>(null);
   const [saving, setSaving] = useState(false);
-  const [testResult, setTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [savingHost, setSavingHost] = useState(false);
+  const [testResult, setTestResult] = useState<{ tab: ConnectionTab; ok: boolean; msg: string } | null>(null);
   const [error, setError] = useState('');
+  const testSSH = tab === 'ssh' && Boolean(onOpenSSHTerminal);
 
   const loadSqliteFiles = async () => {
     try {
@@ -96,6 +111,47 @@ export const ConnectionModal: React.FC<Props> = ({ editing, initialEngine, onClo
     }
   };
 
+  const buildSSHSettings = (): TerminalSSHSettings => ({
+    host: sshHost.trim(),
+    port: Number(sshPort) || 22,
+    username: sshUsername.trim(),
+    authType: sshAuthType,
+    password: sshPassword || undefined,
+    privateKey: sshPrivateKey || undefined,
+    passphrase: sshPassphrase || undefined,
+    hostKeyFingerprint: sshFingerprint.trim(),
+    insecureIgnoreHostKey: sshIgnoreHostKey,
+  });
+
+  const buildTerminalTarget = (): { connectionId: string } | { ssh: TerminalSSHSettings } => {
+    const ssh = buildSSHSettings();
+    if (editing?.ssh.enabled) {
+      const saved = editing.ssh;
+      const useSavedCredential = ssh.authType === 'password'
+        ? saved.hasPassword && !ssh.password
+        : saved.hasPrivateKey && !ssh.privateKey && !ssh.passphrase;
+      if (
+        useSavedCredential &&
+        ssh.host === saved.host.trim() &&
+        ssh.port === (saved.port || 22) &&
+        ssh.username === saved.username.trim() &&
+        ssh.authType === saved.authType &&
+        ssh.hostKeyFingerprint === (saved.hostKeyFingerprint?.trim() ?? '') &&
+        ssh.insecureIgnoreHostKey === saved.insecureIgnoreHostKey
+      ) {
+        return { connectionId: editing.id };
+      }
+    }
+    return {
+      ssh: {
+        ...ssh,
+        password: ssh.authType === 'password' ? ssh.password : undefined,
+        privateKey: ssh.authType === 'privateKey' ? ssh.privateKey : undefined,
+        passphrase: ssh.authType === 'privateKey' ? ssh.passphrase : undefined,
+      },
+    };
+  };
+
   const buildInput = (): ConnectionInput => ({
     id: editing?.id,
     name: name.trim() || `${ENGINE_LABELS[engine]} (${engine === 'sqlite' ? sqlitePath : host})`,
@@ -111,29 +167,39 @@ export const ConnectionModal: React.FC<Props> = ({ editing, initialEngine, onClo
     sqlitePath: sqlitePath.trim(),
     ssh: {
       enabled: engine === 'sqlite' ? false : sshEnabled,
-      host: sshHost.trim(),
-      port: Number(sshPort) || 22,
-      username: sshUsername.trim(),
-      authType: sshAuthType,
-      password: sshPassword || undefined,
-      privateKey: sshPrivateKey || undefined,
-      passphrase: sshPassphrase || undefined,
-      hostKeyFingerprint: sshFingerprint.trim(),
-      insecureIgnoreHostKey: sshIgnoreHostKey,
+      ...buildSSHSettings(),
     },
   });
 
   const handleTest = async () => {
-    setTesting(true);
+    setTestingTab(tab);
     setTestResult(null);
     setError('');
     try {
-      const res = await api.testConnection(buildInput());
-      setTestResult({ ok: true, msg: `连接成功！延迟 ${res.latencyMs} ms` });
+      const latencyMs = testSSH
+        ? await testTerminalConnection(buildTerminalTarget())
+        : (await api.testConnection(buildInput())).latencyMs;
+      setTestResult({ tab, ok: true, msg: `${testSSH ? '终端连接成功' : '连接成功'}！延迟 ${latencyMs} ms` });
     } catch (err) {
-      setTestResult({ ok: false, msg: err instanceof ApiError ? err.message : '连接失败' });
+      const msg = err instanceof ApiError || (testSSH && err instanceof Error) ? err.message : '连接失败';
+      setTestResult({ tab, ok: false, msg });
     } finally {
-      setTesting(false);
+      setTestingTab(null);
+    }
+  };
+
+  const handleSaveHostOnly = async () => {
+    if (!onSaveSSHHost || savingHost) return;
+    setSavingHost(true);
+    setTestResult(null);
+    setError('');
+    try {
+      await onSaveSSHHost({ ...buildTerminalTarget(), name: name.trim() || undefined });
+      setTestResult({ tab: 'ssh', ok: true, msg: '已独立保存为 SSH 主机，可在左侧 SSH 终端区一键打开。' });
+    } catch (err) {
+      setError(err instanceof ApiError || err instanceof Error ? err.message : '保存 SSH 主机失败');
+    } finally {
+      setSavingHost(false);
     }
   };
 
@@ -184,7 +250,9 @@ export const ConnectionModal: React.FC<Props> = ({ editing, initialEngine, onClo
       <div className="flex max-h-[90vh] w-full max-w-2xl flex-col rounded-lg border border-slate-700 bg-slate-900 shadow-2xl">
         <div className="flex items-center justify-between border-b border-slate-800 px-5 py-3">
           <h2 className="text-sm font-semibold text-slate-100">
-            {editing ? `编辑连接：${editing.name}` : '新建数据库连接'}
+            {tab === 'ssh'
+              ? `SSH 隧道设置${editing ? ` · ${editing.name}` : ''}`
+              : editing ? `编辑连接：${editing.name}` : '新建数据库连接'}
           </h2>
           <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-200">
             <X className="h-4 w-4" />
@@ -416,18 +484,13 @@ export const ConnectionModal: React.FC<Props> = ({ editing, initialEngine, onClo
                         className="w-full rounded border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm text-slate-100 outline-none focus:border-indigo-500"
                       />
                     </div>
-                    <div>
-                      <label className="mb-1 block text-xs text-slate-300">
-                        密码 {editing?.hasPassword ? '（留空则保留原密码）' : ''}
-                      </label>
-                      <input
-                        type="password"
-                        placeholder={editing?.hasPassword ? '••••••••' : ''}
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        className="w-full rounded border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm text-slate-100 outline-none focus:border-indigo-500"
-                      />
-                    </div>
+                    <PasswordField
+                      label="数据库密码"
+                      hint={editing?.hasPassword ? '（留空则保留原密码）' : undefined}
+                      saved={editing?.hasPassword}
+                      value={password}
+                      onChange={setPassword}
+                    />
                   </div>
 
                   {(engine === 'sqlserver' || engine === 'oracle') && (
@@ -456,7 +519,7 @@ export const ConnectionModal: React.FC<Props> = ({ editing, initialEngine, onClo
                 启用 SSH 隧道转发（通过跳板机连接内网数据库）
               </label>
 
-              {sshEnabled && (
+              {(sshEnabled || onOpenSSHTerminal) && (
                 <div className="space-y-3 rounded border border-slate-800 bg-slate-950/60 p-4">
                   <div className="grid grid-cols-3 gap-3">
                     <div className="col-span-2">
@@ -466,7 +529,7 @@ export const ConnectionModal: React.FC<Props> = ({ editing, initialEngine, onClo
                         value={sshHost}
                         onChange={(e) => setSshHost(e.target.value)}
                         className="w-full rounded border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm text-slate-100 outline-none focus:border-indigo-500"
-                        required
+                        required={sshEnabled}
                       />
                     </div>
                     <div>
@@ -476,7 +539,7 @@ export const ConnectionModal: React.FC<Props> = ({ editing, initialEngine, onClo
                         value={sshPort}
                         onChange={(e) => setSshPort(Number(e.target.value))}
                         className="w-full rounded border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm text-slate-100 outline-none focus:border-indigo-500"
-                        required
+                        required={sshEnabled}
                       />
                     </div>
                   </div>
@@ -489,7 +552,7 @@ export const ConnectionModal: React.FC<Props> = ({ editing, initialEngine, onClo
                         value={sshUsername}
                         onChange={(e) => setSshUsername(e.target.value)}
                         className="w-full rounded border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm text-slate-100 outline-none focus:border-indigo-500"
-                        required
+                        required={sshEnabled}
                       />
                     </div>
                     <div>
@@ -506,18 +569,13 @@ export const ConnectionModal: React.FC<Props> = ({ editing, initialEngine, onClo
                   </div>
 
                   {sshAuthType === 'password' ? (
-                    <div>
-                      <label className="mb-1 block text-xs text-slate-300">
-                        SSH 密码 {editing?.ssh.hasPassword ? '（留空则保留原密码）' : ''}
-                      </label>
-                      <input
-                        type="password"
-                        placeholder={editing?.ssh.hasPassword ? '••••••••' : ''}
-                        value={sshPassword}
-                        onChange={(e) => setSshPassword(e.target.value)}
-                        className="w-full rounded border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm text-slate-100 outline-none focus:border-indigo-500"
-                      />
-                    </div>
+                    <PasswordField
+                      label="SSH 密码"
+                      hint={editing?.ssh.hasPassword ? '（留空则保留原密码）' : undefined}
+                      saved={editing?.ssh.hasPassword}
+                      value={sshPassword}
+                      onChange={setSshPassword}
+                    />
                   ) : (
                     <>
                       <div>
@@ -532,18 +590,13 @@ export const ConnectionModal: React.FC<Props> = ({ editing, initialEngine, onClo
                           className="w-full rounded border border-slate-700 bg-slate-800 px-3 py-1.5 font-mono text-xs text-slate-100 outline-none focus:border-indigo-500"
                         />
                       </div>
-                      <div>
-                        <label className="mb-1 block text-xs text-slate-300">
-                          私钥口令 Passphrase（若无则留空）
-                        </label>
-                        <input
-                          type="password"
-                          placeholder={editing?.ssh.hasPassphrase ? '••••••••' : ''}
-                          value={sshPassphrase}
-                          onChange={(e) => setSshPassphrase(e.target.value)}
-                          className="w-full rounded border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm text-slate-100 outline-none focus:border-indigo-500"
-                        />
-                      </div>
+                      <PasswordField
+                        label="私钥口令"
+                        hint=" Passphrase（若无则留空）"
+                        saved={editing?.ssh.hasPassphrase}
+                        value={sshPassphrase}
+                        onChange={setSshPassphrase}
+                      />
                     </>
                   )}
 
@@ -576,7 +629,7 @@ export const ConnectionModal: React.FC<Props> = ({ editing, initialEngine, onClo
             </div>
           )}
 
-          {testResult && (
+          {testResult?.tab === tab && (
             <div
               className={`mt-4 flex items-center gap-2 rounded border px-3 py-2 text-xs ${
                 testResult.ok
@@ -595,16 +648,39 @@ export const ConnectionModal: React.FC<Props> = ({ editing, initialEngine, onClo
             </div>
           )}
 
-          <div className="mt-5 flex items-center justify-between border-t border-white/[0.08] pt-4">
-            <button
-              type="button"
-              onClick={handleTest}
-              disabled={testing}
-              className="apple-btn-secondary px-3.5 py-1.5"
-            >
-              {testing && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-              测试连接
-            </button>
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-white/[0.08] pt-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={handleTest}
+                disabled={testingTab !== null}
+                className="apple-btn-secondary px-3.5 py-1.5"
+              >
+                {testingTab === tab && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                {testSSH ? '测试终端连接' : '测试数据库连接'}
+              </button>
+              {tab === 'ssh' && onOpenSSHTerminal && (
+                <button
+                  type="button"
+                  onClick={() => onOpenSSHTerminal(buildSSHSettings())}
+                  className="apple-btn-secondary px-3.5 py-1.5"
+                >
+                  <TerminalSquare className="h-3.5 w-3.5 text-indigo-300" aria-hidden="true" />
+                  打开 SSH 终端
+                </button>
+              )}
+              {tab === 'ssh' && onSaveSSHHost && (
+                <button
+                  type="button"
+                  disabled={savingHost}
+                  onClick={() => void handleSaveHostOnly()}
+                  className="apple-btn-secondary px-3.5 py-1.5"
+                >
+                  {savingHost ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Server className="h-3.5 w-3.5 text-[#64d2ff]" aria-hidden="true" />}
+                  {savingHost ? '保存中...' : '保存为 SSH 主机'}
+                </button>
+              )}
+            </div>
 
             <div className="flex items-center gap-2">
               <button

@@ -9,6 +9,8 @@ import type {
   FilterCondition,
   QueryResult,
   RowMutation,
+  SSHHostSaveInput,
+  SSHHostView,
   SQLiteFileEntry,
   TableSchema,
 } from '../types/db';
@@ -94,6 +96,14 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(input),
     }),
+  listSSHHosts: () => requestJSON<{ hosts: SSHHostView[] }>('/api/ssh/hosts'),
+  createSSHHost: (input: SSHHostSaveInput) =>
+    requestJSON<{ host: SSHHostView }>('/api/ssh/hosts', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+  deleteSSHHost: (id: string) =>
+    requestJSON<void>(`/api/ssh/hosts/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 
   listSqliteFiles: () => requestJSON<{ files: SQLiteFileEntry[]; sqliteDir: string }>('/api/sqlite/files'),
   createSqliteFile: (name: string) =>
@@ -238,8 +248,10 @@ export const api = {
     schema: string;
     table?: string;
     sql?: string;
-    format: 'csv' | 'json' | 'sql';
+    format: ExportFormat;
     withBom?: boolean;
+    delimiter?: string;
+    widths?: string;
     filters?: FilterCondition[];
     sortColumn?: string;
     sortDir?: string;
@@ -253,7 +265,15 @@ export const api = {
     });
     if (!res.ok) {
       const text = await res.text();
-      throw new ApiError(res.status, 'export_error', text || `导出失败 (${res.status})`);
+      let message = '';
+      if (text) {
+        try {
+          message = (JSON.parse(text) as { message?: string }).message ?? '';
+        } catch {
+          message = text;
+        }
+      }
+      throw new ApiError(res.status, 'export_error', message || `导出失败 (${res.status})`);
     }
     const blob = await res.blob();
     const disp = res.headers.get('Content-Disposition') || '';
@@ -288,11 +308,26 @@ export const api = {
   }),
 
   resetSystem: (payload: { clearConnections: boolean; clearSqliteFiles: boolean; confirmed: boolean }) =>
-    requestJSON<{ clearedConnections: number; clearedSqliteFiles: number }>('/api/system/reset', {
+    requestJSON<{ clearedConnections: number; clearedSshHosts?: number; clearedSqliteFiles: number }>('/api/system/reset', {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
 };
+
+export type ExportFormat =
+  | 'csv'
+  | 'txt'
+  | 'tsv'
+  | 'json'
+  | 'jsonl'
+  | 'xml'
+  | 'html'
+  | 'sql'
+  | 'xlsx'
+  | 'xls'
+  | 'ods'
+  | 'dbf'
+  | 'parquet';
 
 
 export type ImportFormat =

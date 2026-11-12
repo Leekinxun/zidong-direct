@@ -34,13 +34,21 @@ func main() {
 	if err != nil {
 		log.Fatalf("init connection store: %v", err)
 	}
+	if err := connStore.ValidateCredentials(); err != nil {
+		log.Fatalf("validate stored connection credentials: %v", err)
+	}
+
+	sshHosts, err := store.NewSSHHostStore(cfg.MetaDir, cipher)
+	if err != nil {
+		log.Fatalf("init SSH host store: %v", err)
+	}
 
 	pools := db.NewPoolManager(func(inputPath string) (string, error) {
 		return store.ResolveSQLitePath(cfg.SQLiteDir, cfg.AllowArbitrarySQLitePaths, inputPath)
 	})
 
 	staticDir := resolveStaticDir()
-	srv := api.NewServer(cfg, connStore, pools, cipher, staticDir)
+	srv := api.NewServer(cfg, connStore, pools, cipher, staticDir, sshHosts)
 
 	httpServer := &http.Server{
 		Addr:              ":" + cfg.Port,

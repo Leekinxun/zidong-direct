@@ -41,7 +41,7 @@
 | :--- | :--- | :---: | :---: | :---: | :---: | :--- |
 | **MySQL / MariaDB** | `go-sql-driver/mysql` | `3306` | - | ✅ | ✅ | 支持 UTF8MB4、多库浏览与在线表设计 |
 | **PostgreSQL** | `jackc/pgx/v5` | `5432` | ✅ | ✅ | ✅ | 兼容 PG 9.5 ~ PG 18（支持 `SCRAM-SHA-256`、`prefer` SSL 自适应回退、PG 12+ `STORED` 与 PG 18 `VIRTUAL` 生成列） |
-| **SQLite 3** | `modernc.org/sqlite` | 本地文件 | - | - | ⚠️ 表重建 | 支持容器挂载浏览、浏览器上传/下载及新建 `.db`；改列自动生成事务重建表 DDL |
+| **SQLite 3** | `modernc.org/sqlite` | 本地文件 | - | - | ⚠️ 表重建 | 支持容器挂载浏览、浏览器上传、一致性快照下载（含 WAL 已提交页）及新建 `.db`；改列自动生成事务重建表 DDL |
 | **SQL Server** | `microsoft/go-mssqldb` | `1433` | ✅ | ✅ | ✅ | 支持 Schema 浏览、TOP 分页与可选 `trustServerCert` |
 | **Oracle** | `sijms/go-ora/v2` | `1521` | ✅ | ✅ | ✅ | 纯 Go 协议直连（无需 Instant Client），支持 **Service Name** 与 **SID** |
 | **达梦数据库 DM7 / DM8** | `gitee.com/chunanyong/dm` | `5236` | ✅ | ✅ | ✅ | 纯 Go 协议直连，支持模式/表/视图浏览、在线 CRUD、建表与 `ALTER` |
@@ -64,11 +64,12 @@
   - 支持「修改前先预览差异 DDL SQL」，按实际变更项精准生成 `ALTER COLUMN` 与表/字段注释语句，确认无误后再提交执行。
 - **表注释与数据库注释查看与编辑**
   - 左侧导航树、对象总览（列表与网格卡片）、表结构设计器及右侧「注释与属性」面板均可直接查看**表注释 / 视图注释**与**数据库注释**，并支持在右侧属性面板及表设计器中直接在线编辑保存。
-- **内置 Xshell 交互式 SSH 终端与隧道代理**
-  - 支持 SSH 密码认证与私钥认证（含私钥口令 Passphrase），支持 SHA256 主机指纹校验，断开连接或删除连接时自动清理隧道资源。
-  - 顶部工具栏与连接右键菜单内置 **SSH 终端 (Xshell 模式)**：既可直接复用已保存连接的 SSH 配置，也可在终端面板直接输入任意服务器 IP / 端口 / 账号密码直连操作终端；原生支持选中后按 **`Ctrl + Shift + C` 复制**、**`Ctrl + Shift + V` 粘贴**（含多行粘贴安全确认与 `Ctrl + C` 中断信号）。
+- **内置 Xshell 交互式 SSH 终端、独立主机管理与隧道代理**
+  - 支持 SSH 密码认证与私钥认证（含私钥口令 Passphrase），所有密码/私钥口令框均支持点击眼睛图标切换明文显示，支持 SHA256 主机指纹校验，断开或删除连接时自动清理隧道资源。
+  - **共区多页签与独立 SSH 主机存储**：SSH 终端与数据库页签共用中央工作区（切换页签保持后台会话不断开），支持左侧 **SSH 终端导航区** 管理已打开会话、**已保存的独立 SSH 主机**（AES-256-GCM 加密存储于 `/data/meta/ssh_hosts.json`）及**已启用 SSH 的数据库连接**；连接配置弹窗和直连表单均支持测试终端连接、一键另存为 SSH 主机及直接打开终端页签。
+  - 原生支持选中后按 **`Ctrl + Shift + C` 复制**、**`Ctrl + Shift + V` 粘贴**（含多行粘贴安全确认、`Ctrl + C` 中断信号及快捷复制/粘贴/清屏按钮）。
 - **Navicat 全格式数据导入与导出向导**
-  - **导出**：支持导出表数据（含当前筛选与排序）或任意 SQL 查询结果为 `CSV`（默认可带 UTF-8 BOM 防止 Win7 Excel 中文乱码）、`JSON` 或 `SQL INSERT` 脚本。
+  - **导出（13 种格式）**：支持导出表数据（含当前筛选与排序）或任意 SQL 查询结果为 `CSV`、`TXT（分隔或定宽文本）`、`TSV`、`JSON`、`JSON Lines (.jsonl)`、`XML`、`HTML 表格`、`SQL INSERT 脚本`、`Excel (.xlsx / .xls)`、`OpenDocument (.ods)`、`dBASE (.dbf)` 与 `Apache Parquet (.parquet)`；支持写入 UTF-8 BOM 防 Win7 Excel 中文乱码。
   - **导入**：对齐 Navicat 全格式导入向导，支持 **本地文件上传**、**剪贴板直接粘贴文本（如从 Excel/WPS 复制表格粘贴）**、**公网 HTTP(S) URL** 与 **Windows ODBC 数据源**；支持 `CSV`、`TXT/定宽文本`、`TSV`、`Excel (.xlsx / .xlsm / .xls)`、`OpenDocument (.ods)`、`JSON`、`JSON Lines (.jsonl)`、`XML`、`HTML 网页表格 (.html)`、`dBASE (.dbf)`、`Apache Parquet (.parquet)`、`SQLite (.sqlite / .db)`、`Access (.mdb / .accdb)` 及 `.sql` 脚本；支持工作表/源表选择、字段映射（按名称/按顺序/手动）与 6 种写入模式（追加、更新、追加或更新、跳过匹配、删除匹配、清空后复制导入）。
 - **一键卸载与工作台清理重置**
   - 网页右上角内置 **「卸载 / 清理」** 面板：支持在线一键清空连接配置、托管 SQLite 文件与浏览器本地缓存（恢复出厂状态），并提供跨平台卸载脚本命令。
@@ -203,7 +204,7 @@ Its layout draws inspiration from classic desktop clients like Navicat paired wi
 | :--- | :--- | :---: | :---: | :---: | :---: | :--- |
 | **MySQL / MariaDB** | `go-sql-driver/mysql` | `3306` | - | ✅ | ✅ | UTF8MB4, multi-database browsing, visual structure design |
 | **PostgreSQL** | `jackc/pgx/v5` | `5432` | ✅ | ✅ | ✅ | Compatible with PG 9.5–18 (`SCRAM-SHA-256`, `prefer` TLS fallback, PG 12+ `STORED` & PG 18 `VIRTUAL` generated columns) |
-| **SQLite 3** | `modernc.org/sqlite` | Local file | - | - | ⚠️ Table Rebuild | Browse hosted dir, upload/download/create `.db` in UI; auto-generates transactional rebuild DDL |
+| **SQLite 3** | `modernc.org/sqlite` | Local file | - | - | ⚠️ Table Rebuild | Browse hosted dir, upload/create `.db`, download consistent online snapshots (incl. WAL); auto-generates transactional rebuild DDL |
 | **SQL Server** | `microsoft/go-mssqldb` | `1433` | ✅ | ✅ | ✅ | Schema browsing, paginated grid, optional `trustServerCert` |
 | **Oracle** | `sijms/go-ora/v2` | `1521` | ✅ | ✅ | ✅ | Direct wire protocol (no Instant Client), **Service Name** & **SID** |
 | **Dameng (DM7 / DM8)** | `gitee.com/chunanyong/dm` | `5236` | ✅ | ✅ | ✅ | Direct wire protocol, schema/object browsing, CRUD & DDL |
@@ -214,8 +215,8 @@ Its layout draws inspiration from classic desktop clients like Navicat paired wi
 - **SQL Query Workbench**: CodeMirror 6 editor with engine-specific SQL dialect highlighting, table/column autocomplete, `Ctrl+Enter` / `Cmd+Enter` execution, selection-only execution, semicolon statement batching, multi-result tabs, and local query history.
 - **Visual Table Designer**: Create or alter tables (columns, type suggestions, PK, auto-increment, defaults, PG 12–18 generated columns, table & column comments, indexes, foreign keys) with live diff DDL preview and freely resizable column widths & field input box dimensions (both width and height).
 - **Table & Database Comments**: View and edit both table/view comments and database-level comments across the sidebar tree, object browser (list & grid views), table designer, and right-hand inspector pane.
-- **Built-in Xshell Interactive SSH Terminal & Tunneling**: Password or private key authentication (with optional passphrase) and SHA256 host key fingerprint verification; open an interactive Xshell-style SSH terminal for any saved connection or custom SSH host with `Ctrl + Shift + C` copy and `Ctrl + Shift + V` paste support.
-- **Navicat-Class Import & Export Wizard**: Export tables or SQL results to `CSV` (optional UTF-8 BOM), `JSON`, or `SQL INSERT` scripts; import from local files, clipboard paste, public HTTP(S) URLs, or Windows ODBC across `CSV`, `TXT/Fixed-Width`, `TSV`, `Excel (.xlsx/.xlsm/.xls)`, `ODS`, `JSON`, `JSONL`, `XML`, `HTML Table (.html)`, `dBASE (.dbf)`, `Parquet (.parquet)`, `SQLite (.sqlite/.db)`, `Access (.mdb/.accdb)`, and `.sql` scripts with column mapping and 6 write modes (`Append`, `Update`, `Upsert`, `Skip`, `Delete`, `Replace`).
+- **Built-in Xshell Interactive SSH Terminal, Standalone Host Store & Tunneling**: Password or private key auth (with optional passphrase, eye-icon password visibility toggle, and SHA256 host key verification); SSH terminal tabs share the main workspace with database tabs while keeping sessions alive in the background, paired with a dedicated sidebar section for **saved standalone SSH hosts**, active sessions, and saved DB SSH tunnels, plus terminal connection testing and `Ctrl + Shift + C / V` copy/paste.
+- **Navicat-Class Import & Export Wizard**: Export tables or SQL results across **13 formats** (`CSV` with optional UTF-8 BOM, `TXT` delimited/fixed-width, `TSV`, `JSON`, `JSONL`, `XML`, `HTML`, `SQL INSERT`, `Excel .xlsx/.xls`, `ODS`, `dBASE .dbf`, and `Parquet`); import from local files, clipboard paste, public HTTP(S) URLs, or Windows ODBC across `CSV`, `TXT/Fixed-Width`, `TSV`, `Excel (.xlsx/.xlsm/.xls)`, `ODS`, `JSON`, `JSONL`, `XML`, `HTML Table (.html)`, `dBASE (.dbf)`, `Parquet (.parquet)`, `SQLite (.sqlite/.db)`, `Access (.mdb/.accdb)`, and `.sql` scripts with column mapping and 6 write modes (`Append`, `Update`, `Upsert`, `Skip`, `Delete`, `Replace`).
 - **One-Click Uninstallation & Workspace Reset**: Reset connections, managed SQLite files, and browser cache directly from the in-app **Uninstall / Reset** dialog, or run [`./uninstall.sh`](./uninstall.sh) / [`.\uninstall.bat`](./uninstall.bat) (`--purge-data`) to remove containers, images, and persisted data.
 - **Security**: Stored database passwords and SSH private keys are encrypted at rest with **AES-256-GCM** and never returned in plaintext via API; optional signed-cookie authentication protects the workbench.
 

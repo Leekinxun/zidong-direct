@@ -3,24 +3,79 @@ package db
 import (
 	"context"
 	"database/sql"
-	"encoding/csv"
-	"encoding/json"
 	"fmt"
 	"io"
-	"strconv"
+	"reflect"
 	"strings"
+	"time"
+	"unicode/utf8"
+
+	dm "gitee.com/chunanyong/dm"
 )
 
 type ExportOptions struct {
-	Format   string // csv | json | sql
-	WithBOM  bool
-	Table    string
-	Database string
-	Schema   string
-	MaxRows  int
+	Format    string
+	WithBOM   bool
+	Delimiter string
+	Widths    string
+	Table     string
+	Database  string
+	Schema    string
+	MaxRows   int
+}
+
+type exportColumn struct {
+	Name         string
+	DatabaseType string
+	ScanType     reflect.Type
+}
+
+// The returned slice is valid until the next call. A writer that batches rows
+// should copy the slice before reading another row.
+type exportNextRow func() ([]any, error)
+
+func ExportContentType(format string) (string, bool) {
+	switch format {
+	case "csv", "":
+		return "text/csv; charset=utf-8", true
+	case "txt":
+		return "text/plain; charset=utf-8", true
+	case "tsv":
+		return "text/tab-separated-values; charset=utf-8", true
+	case "json":
+		return "application/json; charset=utf-8", true
+	case "jsonl":
+		return "application/x-ndjson; charset=utf-8", true
+	case "xml":
+		return "application/xml; charset=utf-8", true
+	case "html":
+		return "text/html; charset=utf-8", true
+	case "sql":
+		return "application/sql; charset=utf-8", true
+	case "xlsx":
+		return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", true
+	case "xls":
+		return "application/vnd.ms-excel", true
+	case "ods":
+		return "application/vnd.oasis.opendocument.spreadsheet", true
+	case "dbf":
+		return "application/x-dbf", true
+	case "parquet":
+		return "application/vnd.apache.parquet", true
+	default:
+		return "", false
+	}
 }
 
 func ExportRowsToWriter(ctx context.Context, conn *sql.DB, d Dialect, querySQL string, args []any, opts ExportOptions, w io.Writer) error {
+	format := strings.ToLower(strings.TrimSpace(opts.Format))
+	if format == "" {
+		format = "csv"
+	}
+	if _, ok := ExportContentType(format); !ok {
+		return fmt.Errorf("不支持的导出格式 %q", opts.Format)
+	}
+
 	rows, err := conn.QueryContext(ctx, querySQL, args...)
 	if err != nil {
 		return err
@@ -35,124 +90,72 @@ func ExportRowsToWriter(ctx context.Context, conn *sql.DB, d Dialect, querySQL s
 	if err != nil {
 		return err
 	}
-
-	rawVals := make([]any, len(colNames))
+	columns := make([]exportColumn, len(colNames))
+	raw := make([]any, len(colNames))
 	ptrs := make([]any, len(colNames))
-	for i := range rawVals {
-		ptrs[i] = &rawVals[i]
+	values := make([]any, len(colNames))
+	for i, name := range colNames {
+		columns[i] = exportColumn{Name: name, DatabaseType: safeColType(colTypes, i)}
+		if i < len(colTypes) && colTypes[i] != nil {
+			columns[i].ScanType = colTypes[i].ScanType()
+		}
+		ptrs[i] = &raw[i]
 	}
 
-	switch strings.ToLower(opts.Format) {
-	case "csv", "":
-		if opts.WithBOM {
-			if _, err := w.Write([]byte{0xEF, 0xBB, 0xBF}); err != nil {
-				return err
-			}
+	count := 0
+	legacy := format == "csv" || format == "json" || format == "sql"
+	next := func() ([]any, error) {
+		if err := ctx.Err(); err != nil {
+			return nil, err
 		}
-		cw := csv.NewWriter(w)
-		if err := cw.Write(colNames); err != nil {
-			return err
+		if opts.MaxRows > 0 && count >= opts.MaxRows {
+			return nil, io.EOF
 		}
-		count := 0
-		for rows.Next() {
-			if opts.MaxRows > 0 && count >= opts.MaxRows {
-				break
+		if !rows.Next() {
+			if err := rows.Err(); err != nil {
+				return nil, err
 			}
-			for i := range rawVals {
-				rawVals[i] = nil
-			}
-			if err := rows.Scan(ptrs...); err != nil {
-				return err
-			}
-			record := make([]string, len(colNames))
-			for i, v := range rawVals {
-				norm := NormalizeCellValue(v, safeColType(colTypes, i))
-				if norm == nil {
-					record[i] = ""
-				} else {
-					record[i] = fmt.Sprintf("%v", norm)
+			return nil, io.EOF
+		}
+		if err := rows.Scan(ptrs...); err != nil {
+			return nil, err
+		}
+		count++
+		for i, value := range raw {
+			if legacy {
+				values[i] = NormalizeCellValue(value, columns[i].DatabaseType)
+			} else {
+				normalized, err := normalizeExportValue(value, columns[i].DatabaseType)
+				if err != nil {
+					return nil, fmt.Errorf("第 %d 行、列 %q: %w", count, columns[i].Name, err)
 				}
+				values[i] = normalized
 			}
-			if err := cw.Write(record); err != nil {
-				return err
-			}
-			count++
 		}
-		cw.Flush()
-		return cw.Error()
+		return values, nil
+	}
 
-	case "json":
-		if _, err := io.WriteString(w, "[\n"); err != nil {
-			return err
-		}
-		first := true
-		count := 0
-		for rows.Next() {
-			if opts.MaxRows > 0 && count >= opts.MaxRows {
-				break
-			}
-			for i := range rawVals {
-				rawVals[i] = nil
-			}
-			if err := rows.Scan(ptrs...); err != nil {
-				return err
-			}
-			obj := make(map[string]any, len(colNames))
-			for i, name := range colNames {
-				obj[name] = NormalizeCellValue(rawVals[i], safeColType(colTypes, i))
-			}
-			b, err := json.Marshal(obj)
-			if err != nil {
-				return err
-			}
-			if !first {
-				if _, err := io.WriteString(w, ",\n"); err != nil {
-					return err
-				}
-			}
-			first = false
-			if _, err := w.Write(b); err != nil {
-				return err
-			}
-			count++
-		}
-		_, err := io.WriteString(w, "\n]\n")
-		return err
-
+	switch format {
+	case "csv", "txt", "tsv":
+		return writeTextExport(w, format, colNames, opts, next)
+	case "json", "jsonl":
+		return writeJSONExport(w, format, colNames, next)
+	case "xml":
+		return writeXMLExport(w, colNames, next)
+	case "html":
+		return writeHTMLExport(w, colNames, next)
 	case "sql":
-		tableName := opts.Table
-		if tableName == "" {
-			tableName = "exported_table"
-		}
-		tableRef := QualifiedTable(d, opts.Database, opts.Schema, tableName)
-		quotedCols := strings.Join(quoteList(d, colNames), ", ")
-		count := 0
-		for rows.Next() {
-			if opts.MaxRows > 0 && count >= opts.MaxRows {
-				break
-			}
-			for i := range rawVals {
-				rawVals[i] = nil
-			}
-			if err := rows.Scan(ptrs...); err != nil {
-				return err
-			}
-			vals := make([]string, len(colNames))
-			for i, v := range rawVals {
-				norm := NormalizeCellValue(v, safeColType(colTypes, i))
-				vals[i] = formatSQLValue(norm)
-			}
-			line := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s);\n", tableRef, quotedCols, strings.Join(vals, ", "))
-			if _, err := io.WriteString(w, line); err != nil {
-				return err
-			}
-			count++
-		}
-		return rows.Err()
-
-	default:
-		return fmt.Errorf("unsupported export format %q", opts.Format)
+		return writeSQLExport(w, d, colNames, opts, next)
+	case "xlsx", "ods":
+		return writeWorkbookExport(w, format, columns, next)
+	case "xls":
+		return writeXLSExport(w, columns, next)
+	case "dbf":
+		return writeDBFExport(w, columns, next)
+	case "parquet":
+		return writeParquetExport(w, columns, next)
 	}
+	return fmt.Errorf("不支持的导出格式 %q", opts.Format)
 }
 
 func safeColType(colTypes []*sql.ColumnType, i int) string {
@@ -162,26 +165,55 @@ func safeColType(colTypes []*sql.ColumnType, i int) string {
 	return ""
 }
 
-func formatSQLValue(v any) string {
-	if v == nil {
-		return "NULL"
-	}
-	switch x := v.(type) {
-	case bool:
-		if x {
-			return "TRUE"
+func normalizeExportValue(value any, colType string) (any, error) {
+	switch val := value.(type) {
+	case time.Time:
+		return val, nil
+	case []byte:
+		// database/sql supplies an owned copy when scanning into *any.
+		if isBinaryType(colType) || !utf8.Valid(val) {
+			return val, nil
 		}
-		return "FALSE"
-	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
-		return fmt.Sprintf("%d", x)
-	case float32, float64:
-		s := fmt.Sprintf("%v", x)
-		if _, err := strconv.ParseFloat(s, 64); err == nil && s != "NaN" && s != "+Inf" && s != "-Inf" {
-			return s
+		return string(val), nil
+	case *dm.DmClob:
+		if val == nil || !val.Valid {
+			return nil, nil
 		}
-		return "'" + strings.ReplaceAll(s, "'", "''") + "'"
+		length, err := val.GetLength()
+		if err != nil {
+			return nil, err
+		}
+		if length == 0 {
+			return "", nil
+		}
+		if length < 0 || length > 8<<20 {
+			return nil, fmt.Errorf("CLOB 长度超过单列导出限制")
+		}
+		return val.ReadString(1, int(length))
+	case *dm.DmBlob:
+		if val == nil || !val.Valid {
+			return nil, nil
+		}
+		length, err := val.GetLength()
+		if err != nil {
+			return nil, err
+		}
+		if length < 0 || length > 32<<20 {
+			return nil, fmt.Errorf("BLOB 长度超过单列导出限制")
+		}
+		data := make([]byte, int(length))
+		if length == 0 {
+			return data, nil
+		}
+		n, err := val.ReadAt(0, data)
+		if n != len(data) {
+			return nil, io.ErrUnexpectedEOF
+		}
+		if err != nil && err != io.EOF {
+			return nil, err
+		}
+		return data, nil
 	default:
-		s := fmt.Sprintf("%v", x)
-		return "'" + strings.ReplaceAll(s, "'", "''") + "'"
+		return NormalizeCellValue(value, colType), nil
 	}
 }

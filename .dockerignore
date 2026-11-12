@@ -1,7 +1,9 @@
 .git
 data
+desktop
 web/node_modules
 web/dist
+web/dist-desktop
 backend/webdb-studio
 *.log
 .DS_Store

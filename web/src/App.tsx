@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ChevronDown,
   Database,
@@ -26,15 +26,19 @@ import { ImportExportModal } from './components/ImportExportModal';
 import { LoginModal } from './components/LoginModal';
 import { ObjectBrowserPane, type ObjectCategory } from './components/ObjectBrowserPane';
 import { RightInfoPane } from './components/RightInfoPane';
+import { SSHSidebar } from './components/SSHSidebar';
 import { SidebarTree, type SelectedTreeContext } from './components/SidebarTree';
 import { SqlWorkspace } from './components/SqlWorkspace';
 import { StructureDesigner } from './components/StructureDesigner';
+import type { TerminalSSHSettings } from './components/TerminalSession';
 import { UninstallModal } from './components/UninstallModal';
 import type {
   ConnectionView,
   DatabaseObject,
   EngineCapabilities,
   EngineType,
+  SSHHostSaveInput,
+  SSHHostView,
   WorkbenchTab,
 } from './types/db';
 
@@ -42,6 +46,15 @@ const OBJECTS_TAB_ID = '__objects__';
 const TerminalWorkspace = React.lazy(() =>
   import('./components/TerminalWorkspace').then(({ TerminalWorkspace }) => ({ default: TerminalWorkspace })),
 );
+
+type TerminalTab = {
+  id: string;
+  kind: 'terminal';
+  title: string;
+  initialSettings?: TerminalSSHSettings;
+  savedConnectionId?: string;
+  savedHostId?: string;
+};
 
 const ENGINE_MENU_ITEMS: Array<{ engine: EngineType; label: string; badge: string }> = [
   { engine: 'mysql', label: 'MySQL / MariaDB', badge: '3306' },
@@ -59,6 +72,8 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState('');
 
   const [connections, setConnections] = useState<ConnectionView[]>([]);
+  const [sshHosts, setSSHHosts] = useState<SSHHostView[]>([]);
+  const [sshHostError, setSSHHostError] = useState('');
   const [capabilities, setCapabilities] = useState<Record<EngineType, EngineCapabilities>>(
     {} as Record<EngineType, EngineCapabilities>,
   );
@@ -68,8 +83,9 @@ export default function App() {
   const [selectedObject, setSelectedObject] = useState<DatabaseObject | null>(null);
   const [objectCategory, setObjectCategory] = useState<ObjectCategory>('tables');
   const [objectsTabOpen, setObjectsTabOpen] = useState(false);
-  const [tabs, setTabs] = useState<WorkbenchTab[]>([]);
+  const [tabs, setTabs] = useState<Array<WorkbenchTab | TerminalTab>>([]);
   const [activeTabId, setActiveTabId] = useState<string>('');
+  const nextTerminalId = useRef(0);
 
   const [connMenuOpen, setConnMenuOpen] = useState(false);
   const [connModalOpen, setConnModalOpen] = useState(false);
@@ -79,7 +95,6 @@ export default function App() {
   const [inspectorRevision, setInspectorRevision] = useState(0);
   const [refreshSignal, setRefreshSignal] = useState(0);
   const [globalIoModal, setGlobalIoModal] = useState<'import' | 'export' | null>(null);
-  const [terminalConnId, setTerminalConnId] = useState<string | null>(null);
   const [uninstallModalOpen, setUninstallModalOpen] = useState(false);
 
   const showObjectDetails = () => {
@@ -101,6 +116,13 @@ export default function App() {
     }
     setCapabilities(capMap);
     setConnections(connsRes.connections || []);
+    try {
+      const { hosts } = await api.listSSHHosts();
+      setSSHHosts(hosts || []);
+      setSSHHostError('');
+    } catch (error) {
+      setSSHHostError(error instanceof Error ? error.message : '无法读取 SSH 主机');
+    }
   };
 
   useEffect(() => {
@@ -132,6 +154,7 @@ export default function App() {
     await api.logout();
     setAuthenticated(false);
     setTabs([]);
+    setSSHHosts([]);
     setObjectsTabOpen(false);
     setActiveTabId('');
   };
@@ -142,13 +165,47 @@ export default function App() {
     setConnModalOpen(true);
   };
 
-  const openTab = (tab: WorkbenchTab) => {
+  const openTab = (tab: WorkbenchTab | TerminalTab) => {
     setTabs((prev) => {
       const existing = prev.find((t) => t.id === tab.id);
       if (existing) return prev;
       return [...prev, tab];
     });
     setActiveTabId(tab.id);
+  };
+
+  const openTerminal = ({ settings, saved, host }: {
+    settings?: TerminalSSHSettings;
+    saved?: ConnectionView;
+    host?: SSHHostView;
+  } = {}) => {
+    const id = `terminal:${++nextTerminalId.current}`;
+    openTab({
+      id,
+      kind: 'terminal',
+      title: host?.name || saved?.name || settings?.host || 'SSH 终端',
+      initialSettings: settings,
+      savedConnectionId: saved?.id,
+      savedHostId: host?.id,
+    });
+  };
+
+  const saveSSHHost = async (input: SSHHostSaveInput) => {
+    const { host } = await api.createSSHHost(input);
+    setSSHHosts((previous) => [...previous, host]);
+    setSSHHostError('');
+    return host;
+  };
+
+  const removeSSHHost = async (host: SSHHostView) => {
+    if (!window.confirm(`确认删除 SSH 主机「${host.name}」吗？`)) return;
+    try {
+      await api.deleteSSHHost(host.id);
+      setSSHHosts((previous) => previous.filter((item) => item.id !== host.id));
+      setSSHHostError('');
+    } catch (error) {
+      setSSHHostError(error instanceof Error ? error.message : '删除 SSH 主机失败');
+    }
   };
 
   const closeTab = (id: string, e: React.MouseEvent) => {
@@ -250,7 +307,7 @@ export default function App() {
   const resolveActiveTarget = (): { conn: ConnectionView; database: string; schema: string } | null => {
     if (connections.length === 0) return null;
     const active = tabs.find((t) => t.id === activeTabId);
-    if (active) {
+    if (active && active.kind !== 'terminal') {
       const conn = connections.find((c) => c.id === active.connectionId) || connections[0];
       return { conn, database: active.database, schema: active.schema };
     }
@@ -288,7 +345,7 @@ export default function App() {
     if (!window.confirm(`确认删除连接「${conn.name}」吗？`)) return;
     await api.deleteConnection(conn.id);
     setConnections((prev) => prev.filter((c) => c.id !== conn.id));
-    setTabs((prev) => prev.filter((t) => t.connectionId !== conn.id));
+    setTabs((prev) => prev.filter((t) => t.kind === 'terminal' || t.connectionId !== conn.id));
     if (selectedContext?.connection.id === conn.id) {
       setSelectedContext(null);
       setSelectedObject(null);
@@ -313,6 +370,8 @@ export default function App() {
 
   const activeTarget = resolveActiveTarget();
   const hasAnyOpenTab = objectsTabOpen || tabs.length > 0;
+  const terminalTabs = tabs.filter((tab): tab is TerminalTab => tab.kind === 'terminal');
+  const activeTerminal = terminalTabs.find((tab) => tab.id === activeTabId);
 
   return (
     <div className="flex h-screen flex-col bg-[#161618] text-[#f2f2f7] select-none">
@@ -382,9 +441,9 @@ export default function App() {
           {/* 2.5 SSH 终端 (Xshell) */}
           <button
             type="button"
-            onClick={() => setTerminalConnId(selectedContext?.connection.id ?? '')}
+            onClick={() => openTerminal()}
             className="apple-toolbar-btn"
-            title="打开 Xshell 交互式 SSH 终端 (支持 Ctrl+Shift+C/V 复制粘贴)"
+            title="新建 Xshell 交互式 SSH 终端页签 (支持 Ctrl+Shift+C/V 复制粘贴)"
           >
             <TerminalSquare className="h-5 w-5 text-[#64d2ff]" strokeWidth={1.8} />
             <span className="text-[12.5px] font-medium">SSH 终端</span>
@@ -481,15 +540,17 @@ export default function App() {
 
         {/* Right Side Controls: Info Pane Toggle + Uninstall/Reset + User */}
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setShowRightPane((v) => !v)}
-            className={showRightPane ? 'apple-btn-primary' : 'apple-btn-secondary'}
-            title="显示/隐藏右侧属性、注释与 DDL 检查器"
-          >
-            <PanelRight className="h-4 w-4" />
-            <span className="hidden sm:inline">注释与属性</span>
-          </button>
+          {!activeTerminal && (
+            <button
+              type="button"
+              onClick={() => setShowRightPane((v) => !v)}
+              className={showRightPane ? 'apple-btn-primary' : 'apple-btn-secondary'}
+              title="显示/隐藏右侧属性、注释与 DDL 检查器"
+            >
+              <PanelRight className="h-4 w-4" />
+              <span className="hidden sm:inline">注释与属性</span>
+            </button>
+          )}
 
           <button
             type="button"
@@ -544,8 +605,26 @@ export default function App() {
           onDesignTable={handleDesignTable}
           onOpenQuery={handleOpenQuery}
           onShowDetails={showObjectDetails}
-          onOpenTerminal={(c) => setTerminalConnId(c.id)}
+          onOpenTerminal={(saved) => openTerminal({ saved })}
+          onSaveSSHHost={async (connection) => {
+            await saveSSHHost({ connectionId: connection.id, name: connection.ssh.host });
+          }}
           refreshSignal={refreshSignal}
+          sshFirst={Boolean(activeTerminal) || sshHosts.length > 0}
+          sshSection={(
+            <SSHSidebar
+              connections={connections}
+              hosts={sshHosts}
+              sessions={terminalTabs}
+              activeTabId={activeTabId}
+              error={sshHostError}
+              onNew={() => openTerminal()}
+              onOpenHost={(host) => openTerminal({ host })}
+              onDeleteHost={(host) => void removeSSHHost(host)}
+              onOpenSaved={(saved) => openTerminal({ saved })}
+              onSelectSession={setActiveTabId}
+            />
+          )}
         />
 
         {/* Center Multi-Tab Workspace */}
@@ -584,20 +663,29 @@ export default function App() {
                 return (
                   <div
                     key={tab.id}
-                    onClick={() => setActiveTabId(tab.id)}
-                    className={`flex max-w-[260px] cursor-pointer items-center gap-2 rounded-[8px] px-3.5 py-1.5 text-[13.5px] font-medium transition-all ${
+                    className={`flex max-w-[260px] shrink-0 items-center gap-1 rounded-[8px] pl-3.5 pr-2 py-1.5 text-[13.5px] font-medium transition-all ${
                       isActive
                         ? 'bg-white/[0.14] text-white shadow-sm'
                         : 'text-[#9e9ea9] hover:bg-white/[0.06] hover:text-[#e4e4e9]'
                     }`}
                   >
-                    {tab.kind === 'data' && <Table2 className="h-4 w-4 shrink-0 text-[#64d2ff]" />}
-                    {tab.kind === 'query' && <Terminal className="h-4 w-4 shrink-0 text-[#30d158]" />}
-                    {tab.kind === 'design' && <Wrench className="h-4 w-4 shrink-0 text-[#ff9f0a]" />}
-                    <span className="truncate">{tab.title}</span>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTabId(tab.id)}
+                      aria-current={isActive ? 'true' : undefined}
+                      className="flex min-w-0 items-center gap-2"
+                      title={tab.title}
+                    >
+                      {tab.kind === 'data' && <Table2 className="h-4 w-4 shrink-0 text-[#64d2ff]" />}
+                      {tab.kind === 'query' && <Terminal className="h-4 w-4 shrink-0 text-[#30d158]" />}
+                      {tab.kind === 'design' && <Wrench className="h-4 w-4 shrink-0 text-[#ff9f0a]" />}
+                      {tab.kind === 'terminal' && <TerminalSquare className="h-4 w-4 shrink-0 text-[#a4a3ff]" />}
+                      <span className="truncate">{tab.title}</span>
+                    </button>
                     <button
                       type="button"
                       onClick={(e) => closeTab(tab.id, e)}
+                      aria-label={`关闭 ${tab.title}`}
                       className="ml-1 rounded-full p-0.5 text-[#9e9ea9] hover:bg-white/[0.15] hover:text-white"
                     >
                       <X className="h-3.5 w-3.5" />
@@ -680,6 +768,24 @@ export default function App() {
                   const hidden = tab.id !== activeTabId;
                   return (
                     <div key={tab.id} className={hidden ? 'hidden' : 'h-full'}>
+                      {tab.kind === 'terminal' && (
+                        <React.Suspense fallback={<div role="status" className="p-4 text-sm text-slate-400">正在加载 SSH 终端</div>}>
+                          <TerminalWorkspace
+                            active={!hidden}
+                            connections={connections}
+                            sshHosts={sshHosts}
+                            initialSource={tab.savedConnectionId || tab.savedHostId ? 'saved' : 'direct'}
+                            initialConnectionId={tab.savedConnectionId || selectedContext?.connection.id}
+                            initialHostId={tab.savedHostId}
+                            autoConnect={Boolean(tab.savedConnectionId || tab.savedHostId)}
+                            initialSettings={tab.initialSettings}
+                            onSaveHost={saveSSHHost}
+                            onDestinationChange={(title) => setTabs((previous) =>
+                              previous.map((item) => item.id === tab.id ? { ...item, title } : item),
+                            )}
+                          />
+                        </React.Suspense>
+                      )}
                       {tab.kind === 'data' && (
                         <DataGridTab
                           connectionId={tab.connectionId}
@@ -764,7 +870,7 @@ export default function App() {
         </main>
 
         {/* Right Collapsible Property & DDL Inspector */}
-        {showRightPane && (
+        {showRightPane && !activeTerminal && (
           <RightInfoPane
             key={inspectorRevision}
             connection={selectedContext?.connection || connections[0] || null}
@@ -782,7 +888,12 @@ export default function App() {
       {/* Bottom macOS Status Bar */}
       <footer className="flex h-8 shrink-0 items-center justify-between border-t border-white/[0.08] bg-[#1e1e21] px-4 text-[12.5px] text-[#9e9ea9]">
         <div className="flex items-center gap-2.5 truncate">
-          {selectedContext?.connection ? (
+          {activeTerminal ? (
+            <span className="inline-flex min-w-0 items-center gap-2">
+              <TerminalSquare className="h-3.5 w-3.5 shrink-0 text-[#a4a3ff]" />
+              <span className="truncate">{activeTerminal.title}</span>
+            </span>
+          ) : selectedContext?.connection ? (
             <>
               <span className="flex items-center gap-1.5 font-medium text-[#e4e4e9]">
                 <span className="h-2 w-2 rounded-full bg-[#30d158]" />
@@ -821,9 +932,11 @@ export default function App() {
             <span>就绪 · 请在左侧展开数据库连接</span>
           )}
         </div>
-        <div className="hidden items-center gap-2 text-[#767682] sm:flex">
-          <span>MySQL · PostgreSQL · SQLite · SQL Server · Oracle · 达梦 DM8</span>
-        </div>
+        {!activeTerminal && (
+          <div className="hidden items-center gap-2 text-[#767682] sm:flex">
+            <span>MySQL · PostgreSQL · SQLite · SQL Server · Oracle · 达梦 DM8</span>
+          </div>
+        )}
       </footer>
 
       {connModalOpen && (
@@ -831,6 +944,13 @@ export default function App() {
           editing={editingConn}
           initialEngine={initialModalEngine}
           onClose={() => setConnModalOpen(false)}
+          onOpenSSHTerminal={(settings) => {
+            openTerminal({ settings });
+            setConnModalOpen(false);
+          }}
+          onSaveSSHHost={async (input) => {
+            await saveSSHHost(input);
+          }}
           onSaved={(saved) => {
             setConnections((prev) => {
               const idx = prev.findIndex((c) => c.id === saved.id);
@@ -856,21 +976,12 @@ export default function App() {
         />
       )}
 
-      {terminalConnId !== null && (
-        <React.Suspense fallback={<div role="status" className="sr-only">正在加载 SSH 终端</div>}>
-          <TerminalWorkspace
-            connections={connections}
-            initialConnectionId={terminalConnId || selectedContext?.connection.id}
-            onClose={() => setTerminalConnId(null)}
-          />
-        </React.Suspense>
-      )}
-
       {uninstallModalOpen && (
         <UninstallModal
           onClose={() => setUninstallModalOpen(false)}
           onResetCompleted={() => {
             setTabs([]);
+            setSSHHosts([]);
             setObjectsTabOpen(false);
             setActiveTabId('');
             setSelectedContext(null);

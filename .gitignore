@@ -1,6 +1,10 @@
 data/
 web/node_modules/
 web/dist/
+web/dist-desktop/
+desktop/node_modules/
+desktop/.staging/
+desktop/dist/
 backend/webdb-studio
 backend/server
 *.db

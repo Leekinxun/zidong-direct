@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { AlertTriangle, Check, Copy, Loader2, Terminal, Trash2, X } from 'lucide-react';
 import { api, ApiError } from '../api/client';
+import { clearBrowserPreferences } from '../preferences';
 
 interface Props {
   onClose: () => void;
@@ -36,18 +37,16 @@ export const UninstallModal: React.FC<Props> = ({ onClose, onResetCompleted }) =
           confirmed,
         });
         msgParts.push(`已清理 ${res.clearedConnections} 个连接配置`);
+        if (res.clearedSshHosts) {
+          msgParts.push(`已清理 ${res.clearedSshHosts} 个独立 SSH 主机`);
+        }
         if (clearSqliteFiles) {
           msgParts.push(`已删除 ${res.clearedSqliteFiles} 个 SQLite 文件`);
         }
       }
       if (clearBrowserCache) {
-        try {
-          localStorage.removeItem('webdb_sql_history_v1');
-          localStorage.removeItem('zd_sidebar_width_v2');
-          msgParts.push('已清空浏览器本地偏好与 SQL 历史缓存');
-        } catch {
-          // ignore
-        }
+        clearBrowserPreferences();
+        msgParts.push('已清空浏览器本地偏好与 SQL 历史缓存');
       }
       setNotice(msgParts.join(' · ') || '清理完成');
       setConfirmed(false);

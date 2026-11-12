@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"path/filepath"
 	"strings"
 
 	_ "modernc.org/sqlite"
@@ -44,11 +45,16 @@ func (d *sqliteDialect) BuildDSN(cfg ConnectionConfig, _ string, _ int, _ string
 	if strings.TrimSpace(cfg.SQLitePath) == "" {
 		return "", errors.New("SQLite file path is required")
 	}
-	u := url.URL{
-		Scheme: "file",
-		Path:   cfg.SQLitePath,
-	}
+	u := sqliteFileURL(cfg.SQLitePath)
 	return u.String() + "?_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)", nil
+}
+
+func sqliteFileURL(path string) url.URL {
+	name := filepath.ToSlash(path)
+	if filepath.VolumeName(path) != "" && !strings.HasPrefix(name, "/") {
+		name = "/" + name
+	}
+	return url.URL{Scheme: "file", Path: name}
 }
 
 func (d *sqliteDialect) ListDatabases(_ context.Context, _ *sql.DB, _ ConnectionConfig) ([]string, error) {

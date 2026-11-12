@@ -6,19 +6,23 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"web-db-client/internal/db"
 	"web-db-client/internal/ssh"
+	"web-db-client/internal/store"
 )
 
 const (
 	maxTerminalSessions = 4
 	terminalAttachTTL   = 15 * time.Second
+	maxTerminalOpenBody = 64 * 1024
 )
 
 type terminalSession struct {
@@ -123,56 +127,92 @@ type terminalDimensions struct {
 	Cols int `json:"cols"`
 }
 
+func normalizeDirectTerminalSSH(cfg *db.SSHConfig) error {
+	cfg.Host = strings.TrimSpace(cfg.Host)
+	cfg.Username = strings.TrimSpace(cfg.Username)
+	if cfg.Host == "" || len(cfg.Host) > 255 || strings.ContainsAny(cfg.Host, "/\\") ||
+		strings.IndexFunc(cfg.Host, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsControl(r) }) >= 0 {
+		return errors.New("请输入有效的 SSH 主机地址")
+	}
+	if strings.HasPrefix(cfg.Host, "[") && strings.HasSuffix(cfg.Host, "]") {
+		cfg.Host = cfg.Host[1 : len(cfg.Host)-1]
+		if !strings.Contains(cfg.Host, ":") {
+			return errors.New("请输入有效的 SSH 主机地址")
+		}
+	}
+	if strings.Contains(cfg.Host, ":") {
+		if _, err := netip.ParseAddr(cfg.Host); err != nil {
+			return errors.New("请将 SSH 主机和端口分开填写")
+		}
+	}
+	if cfg.Port < 0 || cfg.Port > 65535 {
+		return errors.New("SSH 端口必须在 1 到 65535 之间")
+	}
+	if cfg.Username == "" || strings.IndexFunc(cfg.Username, unicode.IsControl) >= 0 {
+		return errors.New("请输入有效的 SSH 用户名")
+	}
+	switch cfg.AuthType {
+	case "", "password":
+		cfg.AuthType = "password"
+		cfg.PrivateKey = ""
+		cfg.Passphrase = ""
+	case "privateKey":
+		cfg.Password = ""
+	default:
+		return errors.New("请选择密码或私钥认证")
+	}
+	return nil
+}
+
 func (s *Server) handleOpenTerminal(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		ConnectionID string        `json:"connectionId"`
+		SSHHostID    string        `json:"sshHostId"`
 		SSH          *db.SSHConfig `json:"ssh"`
 		terminalDimensions
 	}
-	if !decodeJSONBody(w, r, 64*1024, &req) {
+	if !decodeJSONBody(w, r, maxTerminalOpenBody, &req) {
 		return
 	}
-
-	var sshCfg db.SSHConfig
-	if req.SSH != nil && strings.TrimSpace(req.SSH.Host) != "" {
-		sshCfg = *req.SSH
-		sshCfg.Host = strings.TrimSpace(sshCfg.Host)
-		sshCfg.Username = strings.TrimSpace(sshCfg.Username)
-		if sshCfg.Port <= 0 {
-			sshCfg.Port = 22
+	sourceCount := 0
+	for _, present := range []bool{req.ConnectionID != "", req.SSHHostID != "", req.SSH != nil} {
+		if present {
+			sourceCount++
 		}
-		if sshCfg.AuthType == "" {
-			sshCfg.AuthType = "password"
-		}
-		if req.ConnectionID != "" && s.store != nil {
-			if saved, err := s.store.Get(req.ConnectionID); err == nil {
-				if sshCfg.Password == "" {
-					sshCfg.Password = saved.SSH.Password
-				}
-				if sshCfg.PrivateKey == "" {
-					sshCfg.PrivateKey = saved.SSH.PrivateKey
-				}
-				if sshCfg.Passphrase == "" {
-					sshCfg.Passphrase = saved.SSH.Passphrase
-				}
-			}
-		}
-	} else {
-		if s.store == nil || req.ConnectionID == "" {
-			writeError(w, http.StatusBadRequest, "bad_request", "请选择连接或输入 SSH 主机连接信息")
-			return
-		}
-		conn, err := s.store.Get(req.ConnectionID)
-		if err != nil {
-			writeError(w, http.StatusNotFound, "connection_not_found", "找不到所选连接")
-			return
-		}
-		if !conn.SSH.Enabled {
-			writeError(w, http.StatusBadRequest, "ssh_required", "请在所选连接中启用 SSH，或切换到自定义 SSH 主机直连")
-			return
-		}
-		sshCfg = conn.SSH
 	}
+	if sourceCount != 1 {
+		writeError(w, http.StatusBadRequest, "invalid_terminal_source", "请选择一个已保存的 SSH 来源或填写 SSH 服务器信息")
+		return
+	}
+	cfg := req.SSH
+	switch {
+	case cfg != nil:
+		if err := normalizeDirectTerminalSSH(cfg); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid_ssh_config", err.Error())
+			return
+		}
+	case req.SSHHostID != "":
+		if s.sshHosts == nil {
+			writeError(w, http.StatusServiceUnavailable, "ssh_hosts_unavailable", "SSH 主机存储不可用")
+			return
+		}
+		host, err := s.sshHosts.Get(req.SSHHostID)
+		if errors.Is(err, store.ErrSSHHostNotFound) {
+			writeError(w, http.StatusNotFound, "ssh_host_not_found", "找不到所选 SSH 主机")
+			return
+		}
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "ssh_host_read_failed", "无法读取已保存的 SSH 主机")
+			return
+		}
+		cfg = &host
+	default:
+		cfg = s.savedConnectionSSH(w, req.ConnectionID)
+		if cfg == nil {
+			return
+		}
+	}
+	sshCfg := *cfg
 
 	var token [16]byte
 	if _, err := rand.Read(token[:]); err != nil {
@@ -335,6 +375,16 @@ func (s *Server) handleSystemReset(w http.ResponseWriter, r *http.Request) {
 		clearedConns = n
 	}
 
+	var clearedSSHHosts int
+	if req.ClearConnections && s.sshHosts != nil {
+		n, err := s.sshHosts.ClearAll()
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "reset_failed", "清空 SSH 主机配置失败: "+err.Error())
+			return
+		}
+		clearedSSHHosts = n
+	}
+
 	var clearedFiles int
 	if req.ClearSQLiteFiles && s.cfg.SQLiteDir != "" {
 		entries, err := os.ReadDir(s.cfg.SQLiteDir)
@@ -358,6 +408,7 @@ func (s *Server) handleSystemReset(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"clearedConnections": clearedConns,
+		"clearedSshHosts":    clearedSSHHosts,
 		"clearedSqliteFiles": clearedFiles,
 	})
 }

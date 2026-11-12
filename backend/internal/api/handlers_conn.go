@@ -1,12 +1,16 @@
 package api
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"web-db-client/internal/db"
 	"web-db-client/internal/store"
@@ -162,11 +166,11 @@ func (s *Server) handleCreateSQLiteFile(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusBadRequest, "invalid_path", err.Error())
 		return
 	}
-	if _, err := os.Stat(resolved); err == nil {
+	f, err := os.OpenFile(resolved, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o640)
+	if errors.Is(err, os.ErrExist) {
 		writeError(w, http.StatusConflict, "already_exists", "该 SQLite 文件已存在")
 		return
 	}
-	f, err := os.OpenFile(resolved, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o640)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "create_failed", err.Error())
 		return
@@ -211,25 +215,23 @@ func (s *Server) handleUploadSQLiteFile(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	tmpPath := resolved + ".uploading"
-	out, err := os.OpenFile(tmpPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o640)
+	out, err := os.CreateTemp(filepath.Dir(resolved), ".sqlite-upload-*")
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "write_failed", err.Error())
 		return
 	}
+	tmpPath := out.Name()
+	defer os.Remove(tmpPath)
 	if _, err := io.Copy(out, file); err != nil {
 		_ = out.Close()
-		_ = os.Remove(tmpPath)
 		writeError(w, http.StatusInternalServerError, "write_failed", err.Error())
 		return
 	}
 	if err := out.Close(); err != nil {
-		_ = os.Remove(tmpPath)
 		writeError(w, http.StatusInternalServerError, "write_failed", err.Error())
 		return
 	}
 	if err := os.Rename(tmpPath, resolved); err != nil {
-		_ = os.Remove(tmpPath)
 		writeError(w, http.StatusInternalServerError, "write_failed", err.Error())
 		return
 	}
@@ -252,7 +254,32 @@ func (s *Server) handleDownloadSQLiteFile(w http.ResponseWriter, r *http.Request
 		return
 	}
 	safeName := filepath.Base(resolved)
-	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, strings.ReplaceAll(safeName, `"`, "")))
+	if !info.Mode().IsRegular() {
+		writeError(w, http.StatusNotFound, "not_found", "SQLite 文件不存在")
+		return
+	}
+	snapshotDir, err := os.MkdirTemp("", "zidong-sqlite-backup-*")
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "sqlite_backup_failed", err.Error())
+		return
+	}
+	defer os.RemoveAll(snapshotDir)
+
+	ctx, cancel := context.WithTimeout(r.Context(), s.cfg.QueryTimeout)
+	defer cancel()
+	snapshot := filepath.Join(snapshotDir, "snapshot.db")
+	if err := db.BackupSQLite(ctx, resolved, snapshot); err != nil {
+		writeError(w, http.StatusInternalServerError, "sqlite_backup_failed", err.Error())
+		return
+	}
+	f, err := os.Open(snapshot)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "sqlite_backup_failed", err.Error())
+		return
+	}
+	defer f.Close()
+
+	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": safeName}))
 	w.Header().Set("Content-Type", "application/octet-stream")
-	http.ServeFile(w, r, resolved)
+	http.ServeContent(w, r, safeName, time.Time{}, f)
 }
