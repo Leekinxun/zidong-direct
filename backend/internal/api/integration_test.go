@@ -53,7 +53,7 @@ func TestSQLiteEndToEndWorkflow(t *testing.T) {
 	})
 	defer pools.CloseAll()
 
-	srv := api.NewServer(cfg, connStore, pools, cipher, "")
+	srv := api.NewServer(cfg, connStore, pools, cipher, "", nil)
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()
 

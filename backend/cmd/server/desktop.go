@@ -122,6 +122,16 @@ func readDesktopBootstrap(control *bufio.Scanner) (desktopBootstrap, error) {
 
 func desktopCipher(masterKey, keyFile string) (*crypto.Cipher, error) {
 	if masterKey == "" {
+		if _, err := os.Stat(keyFile); errors.Is(err, os.ErrNotExist) {
+			for _, name := range []string{"connections.json", "ssh_hosts.json"} {
+				if _, err := os.Stat(filepath.Join(filepath.Dir(keyFile), name)); !errors.Is(err, os.ErrNotExist) {
+					if err != nil {
+						return nil, err
+					}
+					return nil, errors.New("desktop master key is missing for existing connection data")
+				}
+			}
+		}
 		return crypto.NewCipher("", keyFile)
 	}
 	raw, err := hex.DecodeString(masterKey)

@@ -20,15 +20,17 @@ type Server struct {
 	auth      *AuthHandler
 	staticDir string
 	terminals terminalSessions
+	sshHosts  *store.SSHHostStore
 }
 
-func NewServer(cfg config.Config, st *store.ConnectionStore, pools *db.PoolManager, cipher *crypto.Cipher, staticDir string) *Server {
+func NewServer(cfg config.Config, st *store.ConnectionStore, pools *db.PoolManager, cipher *crypto.Cipher, staticDir string, sshHosts *store.SSHHostStore) *Server {
 	return &Server{
 		cfg:       cfg,
 		store:     st,
 		pools:     pools,
 		auth:      NewAuthHandler(cfg, cipher),
 		staticDir: staticDir,
+		sshHosts:  sshHosts,
 	}
 }
 
@@ -73,6 +75,7 @@ func (s *Server) Handler() http.Handler {
 	routes.add("POST /api/export", s.handleExport)
 	routes.add("POST /api/import", s.handleImport)
 	s.addTerminalRoutes(&routes)
+	s.addSSHHostRoutes(&routes)
 
 	mux := http.NewServeMux()
 	mux.Handle("/", routes.withFallback(s.spaHandler()))

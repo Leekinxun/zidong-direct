@@ -18,6 +18,7 @@ import {
   Search,
   Table2,
   Terminal,
+  TerminalSquare,
   Trash2,
   Unplug,
   X,
@@ -49,7 +50,11 @@ interface Props {
   onOpenTableData: (conn: ConnectionView, database: string, schema: string, table: string) => void;
   onDesignTable: (conn: ConnectionView, database: string, schema: string, table: string, mode: 'create' | 'alter') => void;
   onOpenQuery: (conn: ConnectionView, database: string, schema: string, initialSql?: string) => void;
+  onOpenSSHTerminal?: (conn: ConnectionView) => void;
+  onSaveSSHHost?: (conn: ConnectionView) => Promise<void>;
   refreshSignal?: number;
+  sshSection?: React.ReactNode;
+  sshFirst?: boolean;
 }
 
 type TreeContextMenu =
@@ -91,7 +96,11 @@ export const SidebarTree: React.FC<Props> = ({
   onOpenTableData,
   onDesignTable,
   onOpenQuery,
+  onOpenSSHTerminal,
+  onSaveSSHHost,
   refreshSignal = 0,
+  sshSection,
+  sshFirst = false,
 }) => {
   const [expandedConns, setExpandedConns] = useState<Record<string, boolean>>({});
   const [expandedDBs, setExpandedDBs] = useState<Record<string, boolean>>({});
@@ -103,6 +112,7 @@ export const SidebarTree: React.FC<Props> = ({
   const [objectsByKey, setObjectsByKey] = useState<Record<string, DatabaseObject[]>>({});
   const [loadingKeys, setLoadingKeys] = useState<Record<string, boolean>>({});
   const [treeError, setTreeError] = useState('');
+  const [copyingSSHHost, setCopyingSSHHost] = useState(false);
   const [searchFilter, setSearchFilter] = useState('');
   const [contextMenu, setContextMenu] = useState<TreeContextMenu | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(readSidebarWidth);
@@ -485,11 +495,18 @@ export const SidebarTree: React.FC<Props> = ({
     );
   };
 
+  const sshNavigation = sshSection && (
+    <div className={`max-h-[45%] shrink-0 overflow-y-auto border-white/[0.06] ${sshFirst ? 'border-b' : 'border-t'}`}>
+      {sshSection}
+    </div>
+  );
+
   return (
     <aside
       style={{ width: `${sidebarWidth}px` }}
       className="relative flex h-full shrink-0 flex-col border-r border-white/[0.08] bg-[#1e1e21] select-none"
     >
+      {sshFirst && sshNavigation}
       {/* macOS Sidebar Header */}
       <div className="flex items-center justify-between border-b border-white/[0.06] px-3.5 py-2.5">
         <span className="text-[12.5px] font-semibold tracking-wide text-[#b4b4be]">数据库连接</span>
@@ -514,7 +531,7 @@ export const SidebarTree: React.FC<Props> = ({
       )}
 
       {/* Tree Content */}
-      <div className="flex-1 space-y-1.5 overflow-y-auto p-2">
+      <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto p-2">
         {connections.length === 0 ? (
           <div className="p-5 text-center text-xs text-[#767682]">
             暂无数据库连接，请点击右上角「新建」
@@ -575,7 +592,21 @@ export const SidebarTree: React.FC<Props> = ({
                     <span className="truncate text-[14px] font-semibold text-[#f2f2f7]">{conn.name}</span>
                   </div>
 
-                  <div className="hidden items-center gap-0.5 group-hover:flex" onClick={(e) => e.stopPropagation()}>
+                  {conn.ssh.enabled && onOpenSSHTerminal && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpenSSHTerminal(conn);
+                      }}
+                      aria-label="打开 SSH 终端"
+                      title="打开 SSH 终端"
+                      className="ml-1 shrink-0 rounded p-1 text-[#a4a3ff] hover:bg-white/[0.1] hover:text-white"
+                    >
+                      <TerminalSquare aria-hidden="true" className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                  <div className="hidden shrink-0 items-center gap-0.5 group-hover:flex group-focus-within:flex" onClick={(e) => e.stopPropagation()}>
                     <button
                       type="button"
                       onClick={() => onOpenQuery(conn, conn.database || dbs[0] || '', '')}
@@ -787,6 +818,8 @@ export const SidebarTree: React.FC<Props> = ({
         )}
       </div>
 
+      {!sshFirst && sshNavigation}
+
       {/* macOS Bottom Sidebar Filter Box */}
       <div className="border-t border-white/[0.06] bg-[#1a1a1d] p-2">
         <div className="relative flex items-center">
@@ -849,6 +882,25 @@ export const SidebarTree: React.FC<Props> = ({
                 <Terminal className="h-3.5 w-3.5 text-[#30d158]" />
                 新建 SQL 查询
               </button>
+              {contextMenu.conn.ssh.enabled && onSaveSSHHost && (
+                <button
+                  type="button"
+                  disabled={copyingSSHHost}
+                  onClick={() => {
+                    const conn = contextMenu.conn;
+                    setContextMenu(null);
+                    setTreeError('');
+                    setCopyingSSHHost(true);
+                    void onSaveSSHHost(conn)
+                      .catch((err) => setTreeError(err instanceof Error ? err.message : '无法另存 SSH 主机'))
+                      .finally(() => setCopyingSSHHost(false));
+                  }}
+                  className="flex w-full items-center gap-2 rounded-[6px] px-2.5 py-1.5 text-left hover:bg-[#0a84ff] hover:text-white disabled:opacity-50"
+                >
+                  <TerminalSquare className="h-3.5 w-3.5 text-[#a4a3ff]" />
+                  另存为 SSH 主机
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => {

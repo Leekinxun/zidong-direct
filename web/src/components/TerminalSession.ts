@@ -1,13 +1,15 @@
 import type { Terminal } from '@xterm/xterm';
 import type { SSHInput } from '../types/db';
 
+export type { SSHHostSaveInput } from '../types/db';
+
 export interface TerminalSize {
   rows: number;
   cols: number;
 }
 
 export type TerminalSSHSettings = Omit<SSHInput, 'enabled'>;
-export type TerminalTarget = { connectionId: string } | { ssh: TerminalSSHSettings };
+export type TerminalTarget = { connectionId: string } | { sshHostId: string } | { ssh: TerminalSSHSettings };
 
 const endpoint = '/api/terminal/sessions';
 const maxInputBytes = 128 * 1024;
@@ -16,6 +18,29 @@ async function requireOK(response: Response) {
   if (response.ok) return response;
   const payload = await response.json().catch(() => null) as { message?: string } | null;
   throw new Error(payload?.message || `终端请求失败（HTTP ${response.status}）`);
+}
+
+async function openTerminalSession(target: TerminalTarget, size: TerminalSize, signal?: AbortSignal) {
+  const response = await requireOK(await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...target, rows: size.rows, cols: size.cols }),
+    signal,
+  }));
+  const { sessionId } = await response.json() as { sessionId: string };
+  return sessionId;
+}
+
+function closeTerminalSession(sessionId: string) {
+  return fetch(`${endpoint}/${encodeURIComponent(sessionId)}`, { method: 'DELETE' });
+}
+
+export async function testTerminalConnection(target: TerminalTarget) {
+  const startedAt = performance.now();
+  const sessionId = await openTerminalSession(target, { rows: 24, cols: 80 });
+  const latencyMs = Math.round(performance.now() - startedAt);
+  await requireOK(await closeTerminalSession(sessionId));
+  return latencyMs;
 }
 
 function writeChunk(terminal: Terminal, value: Uint8Array, signal: AbortSignal): Promise<void> {
@@ -49,14 +74,7 @@ export class TerminalSession {
   async connect(target: TerminalTarget, terminal: Terminal, onReady: () => void) {
     const { signal } = this.abort;
     try {
-      const response = await requireOK(await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...target, rows: terminal.rows, cols: terminal.cols }),
-        signal,
-      }));
-      const { sessionId } = await response.json() as { sessionId: string };
-      this.sessionId = sessionId;
+      this.sessionId = await openTerminalSession(target, terminal, signal);
       if (signal.aborted) {
         this.deleteSession();
         return;
@@ -123,9 +141,9 @@ export class TerminalSession {
 
   private deleteSession() {
     if (!this.sessionId) return;
-    const url = `${endpoint}/${encodeURIComponent(this.sessionId)}`;
+    const sessionId = this.sessionId;
     this.sessionId = '';
-    void fetch(url, { method: 'DELETE' }).catch(() => {});
+    void closeTerminalSession(sessionId).catch(() => {});
   }
 
   private fail(error: unknown) {

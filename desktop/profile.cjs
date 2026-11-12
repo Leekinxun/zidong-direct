@@ -112,8 +112,11 @@ async function openWindowsMasterKey(dataDir, safeStorage) {
       throw new Error('主密钥与此用户档案不匹配');
     }
   } else {
-    if (legacy === undefined && await readOptional(path.join(metaDir, 'connections.json'))) {
-      throw new Error('现有连接配置缺少主密钥');
+    if (legacy === undefined && (
+      await readOptional(path.join(metaDir, 'connections.json'))
+      || await readOptional(path.join(metaDir, 'ssh_hosts.json'))
+    )) {
+      throw new Error('现有连接或 SSH 主机缺少主密钥');
     }
     key = legacy ?? randomBytes(32).toString('hex');
     const sealed = safeStorage.encryptString(key);

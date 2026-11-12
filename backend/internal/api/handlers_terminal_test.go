@@ -32,7 +32,7 @@ func TestTerminalRoutesRequireDesktopAndLocalAuthorization(t *testing.T) {
 		{name: "authorized desktop", desktop: true, token: token, status: http.StatusBadRequest},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			handler := NewServer(config.Config{DesktopMode: tc.desktop}, nil, nil, nil, "").Handler()
+			handler := NewServer(config.Config{DesktopMode: tc.desktop}, nil, nil, nil, "", nil).Handler()
 			if tc.desktop {
 				handler = DesktopHandler(host, token, handler)
 			}
@@ -51,12 +51,13 @@ func TestTerminalRoutesRequireDesktopAndLocalAuthorization(t *testing.T) {
 
 func TestTerminalRejectsInvalidDirectRequests(t *testing.T) {
 	const host, token = "127.0.0.1:8080", "fixture-token"
-	handler := DesktopHandler(host, token, NewServer(config.Config{DesktopMode: true}, nil, nil, nil, "").Handler())
+	handler := DesktopHandler(host, token, NewServer(config.Config{DesktopMode: true}, nil, nil, nil, "", nil).Handler())
 	for _, tc := range []struct {
 		name, payload, code string
 	}{
 		{"missing source", `{"rows":24,"cols":80}`, "invalid_terminal_source"},
 		{"ambiguous source", `{"connectionId":"saved","ssh":{},"rows":24,"cols":80}`, "invalid_terminal_source"},
+		{"ambiguous host source", `{"sshHostId":"host","connectionId":"saved","rows":24,"cols":80}`, "invalid_terminal_source"},
 		{"embedded port", `{"ssh":{"host":"127.0.0.1:22","port":22,"username":"fixture","authType":"password"}}`, "invalid_ssh_config"},
 		{"out of range port", `{"ssh":{"host":"127.0.0.1","port":65536,"username":"fixture","authType":"password"}}`, "invalid_ssh_config"},
 		{"unsupported auth", `{"ssh":{"host":"127.0.0.1","username":"fixture","authType":"other"}}`, "invalid_ssh_config"},
@@ -103,7 +104,7 @@ func TestDirectTerminalOpensShellWithoutDatabase(t *testing.T) {
 
 	const token = "fixture-token"
 	server := httptest.NewUnstartedServer(nil)
-	service := NewServer(config.Config{DesktopMode: true}, nil, nil, nil, "")
+	service := NewServer(config.Config{DesktopMode: true}, nil, nil, nil, "", nil)
 	server.Config.Handler = DesktopHandler(server.Listener.Addr().String(), token, service.Handler())
 	server.Start()
 	defer server.Close()

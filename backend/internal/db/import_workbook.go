@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf16"
 )
 
 const maxWorkbookEntryBytes = 128 << 20
@@ -61,11 +62,42 @@ type xlsxText struct {
 
 func (value xlsxText) String() string {
 	var text strings.Builder
-	text.WriteString(value.Text)
+	text.WriteString(decodeXLSXText(value.Text))
 	for _, run := range value.Runs {
-		text.WriteString(run.Text)
+		text.WriteString(decodeXLSXText(run.Text))
 	}
 	return text.String()
+}
+
+// Each Excel inline/shared text element can contain OOXML ST_Xstring escapes.
+func decodeXLSXText(value string) string {
+	if !strings.Contains(value, "_x") {
+		return value
+	}
+	var text strings.Builder
+	for {
+		i := strings.Index(value, "_x")
+		if i == -1 {
+			text.WriteString(value)
+			return text.String()
+		}
+		text.WriteString(value[:i])
+		value = value[i:]
+		r, escaped := xlsxEscapeAt(value)
+		if !escaped {
+			text.WriteString(value[:2])
+			value = value[2:]
+			continue
+		}
+		value = value[7:]
+		if r >= 0xd800 && r <= 0xdbff {
+			if low, ok := xlsxEscapeAt(value); ok && low >= 0xdc00 && low <= 0xdfff {
+				r = utf16.DecodeRune(r, low)
+				value = value[7:]
+			}
+		}
+		text.WriteRune(r)
+	}
 }
 
 type xlsxCell struct {

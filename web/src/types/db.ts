@@ -29,6 +29,16 @@ export interface SSHInput {
   clearPassphrase?: boolean;
 }
 
+export interface SSHHostView extends Omit<SSHView, 'enabled'> {
+  id: string;
+  name: string;
+}
+
+export type SSHHostSaveInput = { name?: string } & (
+  | { ssh: Omit<SSHInput, 'enabled'> }
+  | { connectionId: string }
+);
+
 export interface ConnectionView {
   id: string;
   name: string;

@@ -57,12 +57,14 @@ test('preserves the imported key until backend readiness is confirmed', async (t
   assert.equal((await openWindowsMasterKey(dir, testSafeStorage)).key, key);
 });
 
-test('refuses to create a replacement key for imported connections without their key', async (t) => {
-  const dir = await createProfile(t);
-  const metaDir = path.join(dir, 'meta');
-  await fs.mkdir(metaDir);
-  await fs.writeFile(path.join(metaDir, 'connections.json'), '[]');
+for (const dataFile of ['connections.json', 'ssh_hosts.json']) {
+  test(`refuses to create a replacement key for ${dataFile} without its key`, async (t) => {
+    const dir = await createProfile(t);
+    const metaDir = path.join(dir, 'meta');
+    await fs.mkdir(metaDir);
+    await fs.writeFile(path.join(metaDir, dataFile), '[]');
 
-  await assert.rejects(openWindowsMasterKey(dir, testSafeStorage), /缺少主密钥/);
-  await assert.rejects(fs.access(path.join(metaDir, '.master.key.dpapi')), { code: 'ENOENT' });
-});
+    await assert.rejects(openWindowsMasterKey(dir, testSafeStorage), /缺少主密钥/);
+    await assert.rejects(fs.access(path.join(metaDir, '.master.key.dpapi')), { code: 'ENOENT' });
+  });
+}

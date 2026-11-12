@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"runtime"
 	"strconv"
 	"strings"
@@ -23,8 +24,10 @@ func (s *Server) handleExport(w http.ResponseWriter, r *http.Request) {
 		Schema       string               `json:"schema"`
 		Table        string               `json:"table"`
 		SQL          string               `json:"sql"`
-		Format       string               `json:"format"` // csv | json | sql
+		Format       string               `json:"format"`
 		WithBOM      bool                 `json:"withBom"`
+		Delimiter    string               `json:"delimiter"`
+		Widths       string               `json:"widths"`
 		Filters      []db.FilterCondition `json:"filters"`
 		SortColumn   string               `json:"sortColumn"`
 		SortDir      string               `json:"sortDir"`
@@ -35,6 +38,15 @@ func (s *Server) handleExport(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.ConnectionID == "" {
 		writeError(w, http.StatusBadRequest, "bad_request", "connectionId is required")
+		return
+	}
+	format := strings.ToLower(strings.TrimSpace(req.Format))
+	if format == "" {
+		format = "csv"
+	}
+	contentType, ok := db.ExportContentType(format)
+	if !ok {
+		writeError(w, http.StatusBadRequest, "bad_format", "不支持的导出格式")
 		return
 	}
 
@@ -70,6 +82,15 @@ func (s *Server) handleExport(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "describe_failed", err.Error())
 			return
 		}
+		if schemaInfo.Database != "" {
+			req.Database = schemaInfo.Database
+		}
+		if schemaInfo.Schema != "" {
+			req.Schema = schemaInfo.Schema
+		}
+		if schemaInfo.Table != "" {
+			req.Table = schemaInfo.Table
+		}
 		whereSQL, whereArgs, _, err := db.BuildWhereClause(dialect, schemaInfo.Columns, req.Filters, 1)
 		if err != nil {
 			writeError(w, http.StatusBadRequest, "filter_error", err.Error())
@@ -98,19 +119,6 @@ func (s *Server) handleExport(w http.ResponseWriter, r *http.Request) {
 		args = whereArgs
 	}
 
-	format := strings.ToLower(strings.TrimSpace(req.Format))
-	if format == "" {
-		format = "csv"
-	}
-	ext := format
-	contentType := "text/csv; charset=utf-8"
-	switch format {
-	case "json":
-		contentType = "application/json; charset=utf-8"
-	case "sql":
-		contentType = "application/sql; charset=utf-8"
-	}
-
 	baseName := req.Table
 	if baseName == "" {
 		baseName = "query_result"
@@ -126,47 +134,42 @@ func (s *Server) handleExport(w http.ResponseWriter, r *http.Request) {
 	if maxRows <= 0 {
 		maxRows = 50000
 	}
-	lw := &lazyExportWriter{
-		w:           w,
-		contentType: contentType,
-		filename:    fmt.Sprintf("%s.%s", safeName, ext),
-	}
-	if err := db.ExportRowsToWriter(ctx, handle, dialect, querySQL, args, db.ExportOptions{
-		Format:   format,
-		WithBOM:  req.WithBOM,
-		Table:    req.Table,
-		Database: req.Database,
-		Schema:   req.Schema,
-		MaxRows:  maxRows,
-	}, lw); err != nil {
-		if !lw.wrote {
-			writeError(w, http.StatusBadRequest, "export_failed", err.Error())
-		}
+	file, err := os.CreateTemp("", "zidong-export-*")
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "export_failed", "无法创建导出临时文件")
 		return
 	}
-	if !lw.wrote {
-		lw.ensureHeaders()
+	defer os.Remove(file.Name())
+	defer file.Close()
+
+	// Finish the file before sending the attachment headers so a writer or query
+	// error cannot leave the user with an apparently successful partial file.
+	if err := db.ExportRowsToWriter(ctx, handle, dialect, querySQL, args, db.ExportOptions{
+		Format:    format,
+		WithBOM:   req.WithBOM,
+		Delimiter: req.Delimiter,
+		Widths:    req.Widths,
+		Table:     req.Table,
+		Database:  req.Database,
+		Schema:    req.Schema,
+		MaxRows:   maxRows,
+	}, file); err != nil {
+		writeError(w, http.StatusBadRequest, "export_failed", err.Error())
+		return
 	}
-}
-
-type lazyExportWriter struct {
-	w           http.ResponseWriter
-	contentType string
-	filename    string
-	wrote       bool
-}
-
-func (l *lazyExportWriter) ensureHeaders() {
-	if !l.wrote {
-		l.w.Header().Set("Content-Type", l.contentType)
-		l.w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, l.filename))
-		l.wrote = true
+	info, err := file.Stat()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "export_failed", "无法读取导出文件")
+		return
 	}
-}
-
-func (l *lazyExportWriter) Write(p []byte) (int, error) {
-	l.ensureHeaders()
-	return l.w.Write(p)
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		writeError(w, http.StatusInternalServerError, "export_failed", "无法读取导出文件")
+		return
+	}
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s.%s"`, safeName, format))
+	w.Header().Set("Content-Length", strconv.FormatInt(info.Size(), 10))
+	_, _ = io.Copy(w, file)
 }
 
 type importFile interface {

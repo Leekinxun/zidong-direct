@@ -14,6 +14,7 @@ import (
 
 	"web-db-client/internal/db"
 	"web-db-client/internal/ssh"
+	"web-db-client/internal/store"
 )
 
 const (
@@ -149,33 +150,50 @@ func normalizeDirectTerminalSSH(cfg *db.SSHConfig) error {
 func (s *Server) handleOpenTerminal(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		ConnectionID string        `json:"connectionId"`
+		SSHHostID    string        `json:"sshHostId"`
 		SSH          *db.SSHConfig `json:"ssh"`
 		terminalDimensions
 	}
 	if !decodeJSONBody(w, r, maxTerminalOpenBody, &req) {
 		return
 	}
-	if (req.ConnectionID != "") == (req.SSH != nil) {
-		writeError(w, http.StatusBadRequest, "invalid_terminal_source", "请选择已保存的连接或填写 SSH 服务器信息")
+	sourceCount := 0
+	for _, present := range []bool{req.ConnectionID != "", req.SSHHostID != "", req.SSH != nil} {
+		if present {
+			sourceCount++
+		}
+	}
+	if sourceCount != 1 {
+		writeError(w, http.StatusBadRequest, "invalid_terminal_source", "请选择一个已保存的 SSH 来源或填写 SSH 服务器信息")
 		return
 	}
 	cfg := req.SSH
-	if cfg != nil {
+	switch {
+	case cfg != nil:
 		if err := normalizeDirectTerminalSSH(cfg); err != nil {
 			writeError(w, http.StatusBadRequest, "invalid_ssh_config", err.Error())
 			return
 		}
-	} else {
-		conn, err := s.store.Get(req.ConnectionID)
+	case req.SSHHostID != "":
+		if s.sshHosts == nil {
+			writeError(w, http.StatusServiceUnavailable, "ssh_hosts_unavailable", "SSH 主机存储不可用")
+			return
+		}
+		host, err := s.sshHosts.Get(req.SSHHostID)
+		if errors.Is(err, store.ErrSSHHostNotFound) {
+			writeError(w, http.StatusNotFound, "ssh_host_not_found", "找不到所选 SSH 主机")
+			return
+		}
 		if err != nil {
-			writeError(w, http.StatusNotFound, "connection_not_found", "找不到所选连接")
+			writeError(w, http.StatusInternalServerError, "ssh_host_read_failed", "无法读取已保存的 SSH 主机")
 			return
 		}
-		if !conn.SSH.Enabled {
-			writeError(w, http.StatusBadRequest, "ssh_required", "请在所选连接中启用 SSH 并保存设置")
+		cfg = &host
+	default:
+		cfg = s.savedConnectionSSH(w, req.ConnectionID)
+		if cfg == nil {
 			return
 		}
-		cfg = &conn.SSH
 	}
 	var token [16]byte
 	if _, err := rand.Read(token[:]); err != nil {

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Download, Loader2, X } from 'lucide-react';
-import { api, ApiError } from '../api/client';
+import { api, ApiError, type ExportFormat } from '../api/client';
 import type { FilterCondition } from '../types/db';
 import { DataImportModal } from './DataImportModal';
 
@@ -25,14 +25,23 @@ export function ImportExportModal({ mode, ...props }: Props) {
 function DataExportModal({
   connectionId, database, schema, table, sql, filters, sortColumn, sortDir, onClose,
 }: Omit<Props, 'mode'>) {
-  const [format, setFormat] = useState<'csv' | 'json' | 'sql'>('csv');
+  const [format, setFormat] = useState<ExportFormat>('csv');
+  const [fixedWidth, setFixedWidth] = useState(false);
+  const [delimiter, setDelimiter] = useState('\t');
+  const [widths, setWidths] = useState('');
   const [withBom, setWithBom] = useState(true);
   const [maxRows, setMaxRows] = useState(50000);
   const [running, setRunning] = useState(false);
   const [resultMsg, setResultMsg] = useState('');
   const [error, setError] = useState('');
+  const delimited = format === 'csv' || format === 'txt' || format === 'tsv';
 
   const handleExport = async () => {
+    setResultMsg('');
+    if (format === 'txt' && fixedWidth && !widths.trim()) {
+      setError('请输入各列的固定宽度，例如 8,20,16。');
+      return;
+    }
     setRunning(true);
     setError('');
     try {
@@ -43,7 +52,9 @@ function DataExportModal({
         table: table || undefined,
         sql: sql || undefined,
         format,
-        withBom,
+        withBom: delimited && withBom,
+        delimiter: format === 'txt' && !fixedWidth ? delimiter : undefined,
+        widths: format === 'txt' && fixedWidth ? widths.trim() : undefined,
         filters,
         sortColumn,
         sortDir,
@@ -71,15 +82,65 @@ function DataExportModal({
             <span>文件格式</span>
             <select
               value={format}
-              onChange={(e) => setFormat(e.target.value as 'csv' | 'json' | 'sql')}
+              onChange={(e) => {
+                setFormat(e.target.value as ExportFormat);
+                setError('');
+                setResultMsg('');
+              }}
               className="w-full rounded border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm text-slate-100 outline-none focus:border-indigo-500"
             >
-              <option value="csv">CSV 表格 (.csv)</option>
-              <option value="json">JSON 数组 (.json)</option>
-              <option value="sql">SQL INSERT 脚本 (.sql)</option>
+              <optgroup label="文本与文档">
+                <option value="csv">CSV 表格 (.csv)</option>
+                <option value="txt">分隔或定宽文本 (.txt)</option>
+                <option value="tsv">制表符分隔 (.tsv)</option>
+                <option value="json">JSON 数组 (.json)</option>
+                <option value="jsonl">JSON Lines (.jsonl)</option>
+                <option value="xml">XML (.xml)</option>
+                <option value="html">HTML 表格 (.html)</option>
+                <option value="sql">SQL INSERT 脚本 (.sql)</option>
+              </optgroup>
+              <optgroup label="电子表格">
+                <option value="xlsx">Excel (.xlsx)</option>
+                <option value="xls">Excel 97–2003 (.xls)</option>
+                <option value="ods">OpenDocument (.ods)</option>
+              </optgroup>
+              <optgroup label="数据文件">
+                <option value="dbf">dBASE (.dbf)</option>
+                <option value="parquet">Parquet (.parquet)</option>
+              </optgroup>
             </select>
           </label>
-          {format === 'csv' && (
+          {format === 'txt' && (
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 text-xs text-slate-300">
+                <input type="checkbox" checked={fixedWidth} onChange={(e) => setFixedWidth(e.target.checked)} />
+                定宽文本
+              </label>
+              <label className="block space-y-1 text-xs text-slate-300">
+                <span>{fixedWidth ? '各列宽度（按字符数）' : '分隔符'}</span>
+                {fixedWidth ? (
+                  <input
+                    value={widths}
+                    onChange={(e) => setWidths(e.target.value)}
+                    placeholder="例如 8,20,16"
+                    className="w-full rounded border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm text-slate-100 outline-none focus:border-indigo-500"
+                  />
+                ) : (
+                  <select
+                    value={delimiter}
+                    onChange={(e) => setDelimiter(e.target.value)}
+                    className="w-full rounded border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm text-slate-100 outline-none focus:border-indigo-500"
+                  >
+                    <option value={'\t'}>制表符</option>
+                    <option value=",">逗号</option>
+                    <option value=";">分号</option>
+                    <option value="|">竖线</option>
+                  </select>
+                )}
+              </label>
+            </div>
+          )}
+          {delimited && (
             <label className="flex items-center gap-2 text-xs text-slate-300">
               <input
                 type="checkbox"
@@ -90,10 +151,13 @@ function DataExportModal({
               写入 UTF-8 BOM 头（推荐：解决 Win7 Excel 打开中文乱码）
             </label>
           )}
+          {format === 'xls' && <p className="text-xs text-slate-400">XLS 最多支持 256 列和 65,535 行数据。更大的表请选 XLSX。</p>}
+          {format === 'dbf' && <p className="text-xs text-slate-400">DBF 使用 GBK 编码，列名最长 10 个字符。</p>}
           <label className="block space-y-1 text-xs text-slate-300">
             <span>最大导出行数</span>
             <input
               type="number"
+              min={1}
               value={maxRows}
               onChange={(e) => setMaxRows(Number(e.target.value) || 50000)}
               className="w-full rounded border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm text-slate-100 outline-none focus:border-indigo-500"

@@ -63,16 +63,21 @@ func newHandler(cfg config.Config, cipher *crypto.Cipher, staticDir string) (htt
 	if err != nil {
 		return nil, nil, fmt.Errorf("init connection store: %w", err)
 	}
+	var sshHosts *store.SSHHostStore
 	if cfg.DesktopMode {
 		if err := connStore.ValidateCredentials(); err != nil {
 			return nil, nil, fmt.Errorf("validate stored connection credentials: %w", err)
+		}
+		sshHosts, err = store.NewSSHHostStore(cfg.MetaDir, cipher)
+		if err != nil {
+			return nil, nil, fmt.Errorf("init SSH host store: %w", err)
 		}
 	}
 
 	pools := db.NewPoolManager(func(inputPath string) (string, error) {
 		return store.ResolveSQLitePath(cfg.SQLiteDir, cfg.AllowArbitrarySQLitePaths, inputPath)
 	})
-	return api.NewServer(cfg, connStore, pools, cipher, staticDir).Handler(), pools, nil
+	return api.NewServer(cfg, connStore, pools, cipher, staticDir, sshHosts).Handler(), pools, nil
 }
 
 func serve(ctx context.Context, listener net.Listener, handler http.Handler, stop <-chan struct{}) error {

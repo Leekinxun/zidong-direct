@@ -9,6 +9,8 @@ import type {
   FilterCondition,
   QueryResult,
   RowMutation,
+  SSHHostSaveInput,
+  SSHHostView,
   SQLiteFileEntry,
   TableSchema,
 } from '../types/db';
@@ -23,6 +25,8 @@ export class ApiError extends Error {
     this.code = code;
   }
 }
+
+export type ExportFormat = 'csv' | 'txt' | 'tsv' | 'json' | 'jsonl' | 'xml' | 'html' | 'sql' | 'xls' | 'xlsx' | 'ods' | 'dbf' | 'parquet';
 
 async function requestJSON<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, {
@@ -94,6 +98,14 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(input),
     }),
+  listSSHHosts: () => requestJSON<{ hosts: SSHHostView[] }>('/api/ssh/hosts'),
+  createSSHHost: (input: SSHHostSaveInput) =>
+    requestJSON<{ host: SSHHostView }>('/api/ssh/hosts', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+  deleteSSHHost: (id: string) =>
+    requestJSON<void>(`/api/ssh/hosts/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 
   listSqliteFiles: () => requestJSON<{ files: SQLiteFileEntry[]; sqliteDir: string }>('/api/sqlite/files'),
   createSqliteFile: (name: string) =>
@@ -219,8 +231,10 @@ export const api = {
     schema: string;
     table?: string;
     sql?: string;
-    format: 'csv' | 'json' | 'sql';
+    format: ExportFormat;
     withBom?: boolean;
+    delimiter?: string;
+    widths?: string;
     filters?: FilterCondition[];
     sortColumn?: string;
     sortDir?: string;
@@ -233,8 +247,8 @@ export const api = {
       body: JSON.stringify(payload),
     });
     if (!res.ok) {
-      const text = await res.text();
-      throw new ApiError(res.status, 'export_error', text || `导出失败 (${res.status})`);
+      const failure = await res.json().catch(() => null) as { error?: string; message?: string } | null;
+      throw new ApiError(res.status, failure?.error || 'export_error', failure?.message || `导出失败 (${res.status})`);
     }
     const blob = await res.blob();
     const disp = res.headers.get('Content-Disposition') || '';

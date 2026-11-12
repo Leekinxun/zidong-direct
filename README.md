@@ -65,9 +65,11 @@
   - 从数据库、表或视图的「查看注释」打开属性面板。数据库级注释支持 PostgreSQL、MariaDB 10.5+ 和配置了 `MS_Description` 的 SQL Server。
 - **SSH 隧道代理**
   - 支持 SSH 密码认证与私钥认证（含私钥口令 Passphrase），支持 SHA256 主机指纹校验，断开连接或删除连接时自动清理隧道资源。
-  - 桌面版可从「SSH 终端」直接填写服务器地址和认证信息，或复用已保存的 SSH 设置。选中内容后用 `Ctrl+Shift+C` 复制，用 `Ctrl+Shift+V` 粘贴。多行粘贴需要确认，`Ctrl+C` 向远端发送中断。
+  - 桌面版可从左侧 SSH 区打开已保存的 SSH 设置，或新建终端页签后直接填写服务器地址和认证信息。终端与数据库页签共用工作区，切换页签时会话继续运行，关闭终端页签会断开连接。
+  - 在终端连接表单或数据库窗口的 SSH 页签点「保存 SSH 主机」，可独立保存服务器配置。左侧「已保存的 SSH 主机」中的条目点击即打开终端页签并连接。数据库条目右键可「另存为 SSH 主机」。
+  - 从数据库连接窗口的 SSH 页签可测试终端连接，也可点「打开 SSH 终端」把当前输入带入新页签。选中终端内容后用 `Ctrl+Shift+C` 复制，用 `Ctrl+Shift+V` 粘贴。多行粘贴需要确认，`Ctrl+C` 向远端发送中断。
 - **数据导入与导出**
-  - **导出**：支持导出表数据（含当前筛选与排序）或任意 SQL 查询结果为 `CSV`（默认可带 UTF-8 BOM 防止 Win7 Excel 中文乱码）、`JSON` 或 `SQL INSERT` 脚本。
+  - **导出**支持表数据（含当前筛选与排序）和单条 SQL 查询结果，格式包括 CSV、TXT、TSV、JSON、JSON Lines、XML、HTML、SQL INSERT、Excel（XLS、XLSX）、ODS、DBF 和平面 Parquet。CSV、TXT、TSV 可带 UTF-8 BOM，TXT 支持选择分隔符或按列指定定宽。
   - **导入**支持 CSV、TXT、TSV、定宽文本、JSON、JSON Lines、XML、Excel（XLS、XLSX、XLSM）、ODS、DBF、平面 Parquet 和本地 SQL 脚本。导入向导可预览字段、选择工作表，并按列名、位置或手动建立映射。
   - 桌面版及启用登录的 Web 版可从公开 HTTP(S) 文件 URL 导入表数据，下载时限制文件大小并校验预览与导入的内容一致。Windows 桌面版也可从 ODBC DSN 或 Access（MDB、ACCDB）导入，需要安装与应用位数匹配的驱动。
   - 导入向导每次处理一个来源和一张现有表，可追加、按主键更新、更新或追加、跳过匹配项、删除匹配项，或清空后导入。删除与清空模式会要求确认。

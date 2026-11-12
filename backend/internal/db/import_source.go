@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/csv"
 	"encoding/json"
 	"encoding/xml"
@@ -182,20 +183,28 @@ func delimitedImport(reader io.Reader, opts ImportOptions) (importSource, error)
 	return tabularImport(next, opts)
 }
 
-func fixedWidthReader(reader io.Reader, spec string) (func() ([]any, error), error) {
+func parseFixedWidths(spec string) ([]int, int, error) {
 	fields := strings.Split(spec, ",")
 	if len(fields) > maxImportColumns {
-		return nil, errors.New("固定宽度列过多")
+		return nil, 0, errors.New("固定宽度列过多")
 	}
 	widths := make([]int, len(fields))
 	total := 0
 	for i, field := range fields {
 		width, err := strconv.Atoi(strings.TrimSpace(field))
 		if err != nil || width <= 0 || width > 100000-total {
-			return nil, errors.New("固定宽度必须是逗号分隔的正整数，总宽度不能超过 100000")
+			return nil, 0, errors.New("固定宽度必须是逗号分隔的正整数，总宽度不能超过 100000")
 		}
 		widths[i] = width
 		total += width
+	}
+	return widths, total, nil
+}
+
+func fixedWidthReader(reader io.Reader, spec string) (func() ([]any, error), error) {
+	widths, total, err := parseFixedWidths(spec)
+	if err != nil {
+		return nil, err
 	}
 	scanner := bufio.NewScanner(reader)
 	scanner.Buffer(make([]byte, 4096), 4*100000+2)
@@ -461,8 +470,11 @@ func xmlImport(ctx context.Context, reader io.Reader, opts ImportOptions) (impor
 			found = true
 			var row struct {
 				Fields []struct {
-					XMLName xml.Name
-					Value   string `xml:",chardata"`
+					XMLName  xml.Name
+					Name     string `xml:"name,attr"`
+					Null     string `xml:"null,attr"`
+					Encoding string `xml:"encoding,attr"`
+					Value    string `xml:",chardata"`
 				} `xml:",any"`
 			}
 			if err := dec.DecodeElement(&row, &element); err != nil {
@@ -475,10 +487,31 @@ func xmlImport(ctx context.Context, reader io.Reader, opts ImportOptions) (impor
 				}
 			}
 			for _, field := range row.Fields {
-				if _, exists := record[field.XMLName.Local]; exists {
-					return nil, fmt.Errorf("XML 行中的字段 %q 重复", field.XMLName.Local)
+				name := field.XMLName.Local
+				var value any = field.Value
+				if field.XMLName.Space == exportXMLNamespace && name == "field" {
+					name = field.Name
+					if name == "" {
+						return nil, errors.New("XML 导出字段缺少列名")
+					}
+					switch {
+					case field.Null == "true":
+						value = nil
+					case field.Encoding == "base64" || field.Encoding == "base64-text":
+						data, err := base64.StdEncoding.DecodeString(field.Value)
+						if err != nil {
+							return nil, fmt.Errorf("XML 字段 %q 编码无效: %w", name, err)
+						}
+						value = data
+						if field.Encoding == "base64-text" {
+							value = string(data)
+						}
+					}
 				}
-				record[field.XMLName.Local] = field.Value
+				if _, exists := record[name]; exists {
+					return nil, fmt.Errorf("XML 行中的字段 %q 重复", name)
+				}
+				record[name] = value
 			}
 			return record, nil
 		}
