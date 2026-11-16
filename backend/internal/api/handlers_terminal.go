@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/netip"
@@ -14,13 +15,13 @@ import (
 	"time"
 	"unicode"
 
+	"web-db-client/internal/config"
 	"web-db-client/internal/db"
 	"web-db-client/internal/ssh"
 	"web-db-client/internal/store"
 )
 
 const (
-	maxTerminalSessions = 4
 	terminalAttachTTL   = 15 * time.Second
 	maxTerminalOpenBody = 64 * 1024
 )
@@ -29,17 +30,19 @@ type terminalSession struct {
 	terminal *ssh.Terminal
 	timer    *time.Timer
 	attached bool
+	done     chan struct{}
 }
 
 type terminalSessions struct {
 	mu       sync.Mutex
 	sessions map[string]*terminalSession
+	stopped  bool
 }
 
-func (sessions *terminalSessions) reserve(id string) bool {
+func (sessions *terminalSessions) reserve(id string, limit int) bool {
 	sessions.mu.Lock()
 	defer sessions.mu.Unlock()
-	if len(sessions.sessions) >= maxTerminalSessions {
+	if sessions.stopped || len(sessions.sessions) >= limit {
 		return false
 	}
 	if sessions.sessions == nil {
@@ -48,19 +51,23 @@ func (sessions *terminalSessions) reserve(id string) bool {
 	if _, exists := sessions.sessions[id]; exists {
 		return false
 	}
-	sessions.sessions[id] = &terminalSession{}
+	sessions.sessions[id] = &terminalSession{done: make(chan struct{})}
 	return true
 }
 
-func (sessions *terminalSessions) start(id string, terminal *ssh.Terminal) {
+func (sessions *terminalSessions) start(id string, terminal *ssh.Terminal) bool {
 	sessions.mu.Lock()
 	defer sessions.mu.Unlock()
 	entry := sessions.sessions[id]
+	if entry == nil {
+		return false
+	}
 	entry.terminal = terminal
 	entry.timer = time.AfterFunc(terminalAttachTTL, func() { sessions.close(id, true) })
+	return true
 }
 
-func (sessions *terminalSessions) attach(id string) (terminal *ssh.Terminal, alreadyAttached bool) {
+func (sessions *terminalSessions) attach(id string) (session *terminalSession, alreadyAttached bool) {
 	sessions.mu.Lock()
 	defer sessions.mu.Unlock()
 	entry := sessions.sessions[id]
@@ -72,7 +79,7 @@ func (sessions *terminalSessions) attach(id string) (terminal *ssh.Terminal, alr
 	}
 	entry.attached = true
 	entry.timer.Stop()
-	return entry.terminal, false
+	return entry, false
 }
 
 func (sessions *terminalSessions) active(id string) *ssh.Terminal {
@@ -93,6 +100,11 @@ func (sessions *terminalSessions) close(id string, unattachedOnly bool) {
 	}
 	delete(sessions.sessions, id)
 	sessions.mu.Unlock()
+	entry.close()
+}
+
+func (entry *terminalSession) close() {
+	close(entry.done)
 	if entry.timer != nil {
 		entry.timer.Stop()
 	}
@@ -101,21 +113,26 @@ func (sessions *terminalSessions) close(id string, unattachedOnly bool) {
 	}
 }
 
-func (sessions *terminalSessions) closeAll() {
+func (sessions *terminalSessions) closeAll(stop bool) {
 	sessions.mu.Lock()
-	ids := make([]string, 0, len(sessions.sessions))
-	for id := range sessions.sessions {
-		ids = append(ids, id)
-	}
+	sessions.stopped = sessions.stopped || stop
+	entries := sessions.sessions
+	sessions.sessions = nil
 	sessions.mu.Unlock()
-	for _, id := range ids {
-		sessions.close(id, false)
+	for _, entry := range entries {
+		entry.close()
 	}
+}
+
+// CloseTerminals stops admission and releases the terminal transports before shutdown.
+func (s *Server) CloseTerminals() {
+	s.terminals.closeAll(true)
 }
 
 func (s *Server) addTerminalRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/terminal/sessions", s.handleOpenTerminal)
 	mux.HandleFunc("GET /api/terminal/sessions/{id}/output", s.handleTerminalOutput)
+	mux.HandleFunc("GET /api/terminal/sessions/{id}/stream", s.handleTerminalStream)
 	mux.HandleFunc("POST /api/terminal/sessions/{id}/input", s.handleTerminalInput)
 	mux.HandleFunc("POST /api/terminal/sessions/{id}/resize", s.handleTerminalResize)
 	mux.HandleFunc("DELETE /api/terminal/sessions/{id}", s.handleCloseTerminal)
@@ -169,6 +186,7 @@ func (s *Server) handleOpenTerminal(w http.ResponseWriter, r *http.Request) {
 		ConnectionID string        `json:"connectionId"`
 		SSHHostID    string        `json:"sshHostId"`
 		SSH          *db.SSHConfig `json:"ssh"`
+		Encoding     string        `json:"encoding"`
 		terminalDimensions
 	}
 	if !decodeJSONBody(w, r, maxTerminalOpenBody, &req) {
@@ -220,8 +238,12 @@ func (s *Server) handleOpenTerminal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := hex.EncodeToString(token[:])
-	if !s.terminals.reserve(id) {
-		writeError(w, http.StatusTooManyRequests, "terminal_limit", "终端会话已达上限，请先断开其他终端")
+	limit := s.cfg.MaxTerminalSessions
+	if limit <= 0 {
+		limit = config.DefaultMaxTerminalSessions
+	}
+	if !s.terminals.reserve(id, limit) {
+		writeError(w, http.StatusTooManyRequests, "terminal_limit", fmt.Sprintf("终端会话已达上限（%d 个），请先断开其他终端", limit))
 		return
 	}
 	success := false
@@ -230,7 +252,7 @@ func (s *Server) handleOpenTerminal(w http.ResponseWriter, r *http.Request) {
 			s.terminals.close(id, false)
 		}
 	}()
-	terminal, err := ssh.OpenTerminal(r.Context(), ssh.Spec{
+	terminal, err := ssh.OpenTerminalWithEncoding(r.Context(), ssh.Spec{
 		Host:                  sshCfg.Host,
 		Port:                  sshCfg.Port,
 		Username:              sshCfg.Username,
@@ -240,7 +262,7 @@ func (s *Server) handleOpenTerminal(w http.ResponseWriter, r *http.Request) {
 		Passphrase:            sshCfg.Passphrase,
 		HostKeyFingerprint:    sshCfg.HostKeyFingerprint,
 		InsecureIgnoreHostKey: sshCfg.InsecureIgnoreHostKey,
-	}, req.Rows, req.Cols)
+	}, req.Rows, req.Cols, req.Encoding)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "terminal_connect_failed", "无法打开 SSH 终端："+err.Error())
 		return
@@ -249,7 +271,11 @@ func (s *Server) handleOpenTerminal(w http.ResponseWriter, r *http.Request) {
 		terminal.Close()
 		return
 	}
-	s.terminals.start(id, terminal)
+	if !s.terminals.start(id, terminal) {
+		terminal.Close()
+		writeTerminalClosed(w)
+		return
+	}
 	success = true
 	writeJSON(w, http.StatusCreated, map[string]string{"sessionId": id})
 }
@@ -266,15 +292,16 @@ func (s *Server) handleTerminalOutput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := r.PathValue("id")
-	terminal, alreadyAttached := s.terminals.attach(id)
+	session, alreadyAttached := s.terminals.attach(id)
 	if alreadyAttached {
 		writeError(w, http.StatusConflict, "terminal_already_attached", "终端已连接到另一个输出流")
 		return
 	}
-	if terminal == nil {
+	if session == nil {
 		writeTerminalClosed(w)
 		return
 	}
+	terminal := session.terminal
 	defer s.terminals.close(id, false)
 	done := make(chan struct{})
 	defer close(done)
@@ -289,7 +316,7 @@ func (s *Server) handleTerminalOutput(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.WriteHeader(http.StatusOK)
 	flusher.Flush()
-	buf := make([]byte, 16*1024)
+	buf := make([]byte, terminalOutputChunk)
 	for {
 		n, readErr := terminal.Output.Read(buf)
 		if n > 0 {
@@ -321,7 +348,14 @@ func (s *Server) handleTerminalInput(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_terminal_input", "无法读取终端输入")
 		return
 	}
-	writeTerminalCommand(w, terminal.Send(data))
+	switch r.Header.Get("X-Zidong-Terminal-Input") {
+	case "", "text":
+		writeTerminalCommand(w, terminal.Send(data))
+	case "binary":
+		writeTerminalCommand(w, terminal.SendRaw(data))
+	default:
+		writeError(w, http.StatusBadRequest, "invalid_terminal_input", "无法识别终端输入类型")
+	}
 }
 
 func (s *Server) handleTerminalResize(w http.ResponseWriter, r *http.Request) {
@@ -360,7 +394,7 @@ func (s *Server) handleSystemReset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.terminals.closeAll()
+	s.terminals.closeAll(false)
 	if s.pools != nil {
 		s.pools.CloseAll()
 	}
@@ -425,6 +459,8 @@ func writeTerminalCommand(w http.ResponseWriter, err error) {
 		writeTerminalClosed(w)
 	case errors.Is(err, ssh.ErrTerminalBusy):
 		writeError(w, http.StatusTooManyRequests, "terminal_busy", "终端输入缓冲已满")
+	case errors.Is(err, ssh.ErrTerminalInputEncoding):
+		writeError(w, http.StatusBadRequest, "terminal_input_encoding", err.Error())
 	default:
 		writeError(w, http.StatusBadRequest, "invalid_terminal_command", err.Error())
 	}

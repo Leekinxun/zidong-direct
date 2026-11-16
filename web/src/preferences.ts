@@ -12,6 +12,8 @@ interface DesktopPreferences {
   sqlHistory?: SqlHistoryItem[];
 }
 
+type FontSizePreference = 'databaseFontSize' | 'terminalFontSize';
+
 declare global {
   interface Window {
     zidongDesktop?: {
@@ -30,11 +32,52 @@ const SQL_HISTORY_KEY = 'webdb_sql_history_v1';
 const MAX_HISTORY_ENTRIES = 30;
 const MAX_DESKTOP_HISTORY_BYTES = 2 * 1024 * 1024;
 const EMPTY_SQL_HISTORY: SqlHistoryItem[] = [];
+const FONT_SIZE_DEFAULT = 14;
+const FONT_SIZE_MIN = 10;
+const FONT_SIZE_MAX = 32;
 
 let desktopSidebarWidth: number | undefined;
 let cachedHistory = EMPTY_SQL_HISTORY;
 let cachedWebHistoryJson: string | null | undefined;
 const historyListeners = new Set<() => void>();
+const fontSizeListeners = new Set<() => void>();
+
+function loadWebFontSize(preference: FontSizePreference): number {
+  try {
+    const value = Number(localStorage.getItem(`zd_${preference}`));
+    if (Number.isInteger(value) && value >= FONT_SIZE_MIN && value <= FONT_SIZE_MAX) return value;
+  } catch {
+    // localStorage is optional.
+  }
+  return FONT_SIZE_DEFAULT;
+}
+
+const fontSizes: Record<FontSizePreference, number> = {
+  databaseFontSize: loadWebFontSize('databaseFontSize'),
+  terminalFontSize: loadWebFontSize('terminalFontSize'),
+};
+
+export function subscribeToFontSize(listener: () => void) {
+  fontSizeListeners.add(listener);
+  return () => { fontSizeListeners.delete(listener); };
+}
+
+function adjustFontSize(preference: FontSizePreference, step: number) {
+  const size = Math.min(FONT_SIZE_MAX, Math.max(FONT_SIZE_MIN, fontSizes[preference] + step));
+  if (size === fontSizes[preference]) return;
+  fontSizes[preference] = size;
+  try {
+    localStorage.setItem(`zd_${preference}`, String(size));
+  } catch {
+    // localStorage is optional.
+  }
+  fontSizeListeners.forEach((listener) => listener());
+}
+
+export const readDatabaseFontSize = () => fontSizes.databaseFontSize;
+export const readTerminalFontSize = () => fontSizes.terminalFontSize;
+export const adjustDatabaseFontSize = (step: number) => adjustFontSize('databaseFontSize', step);
+export const adjustTerminalFontSize = (step: number) => adjustFontSize('terminalFontSize', step);
 
 export async function loadDesktopPreferences(): Promise<void> {
   try {

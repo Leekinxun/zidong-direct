@@ -135,6 +135,13 @@ func terminalFixtureSpec(listener net.Listener, signer gossh.Signer) Spec {
 }
 
 func serveTerminalFixture(listener net.Listener, signer gossh.Signer, events chan<- [2]uint32, closed chan<- struct{}) {
+	serveTerminalFixtureWithShell(listener, signer, events, closed, func(channel gossh.Channel) {
+		_, _ = io.WriteString(channel, "\x1b[32mfixture $ \x1b[0m")
+		_, _ = io.Copy(channel, channel)
+	})
+}
+
+func serveTerminalFixtureWithShell(listener net.Listener, signer gossh.Signer, events chan<- [2]uint32, closed chan<- struct{}, shell func(gossh.Channel)) {
 	defer close(closed)
 	raw, err := listener.Accept()
 	if err != nil {
@@ -182,9 +189,8 @@ func serveTerminalFixture(listener net.Listener, signer gossh.Signer, events cha
 			case "shell":
 				_ = req.Reply(true, nil)
 				go func() {
-					_, _ = io.WriteString(channel, "\x1b[32mfixture $ \x1b[0m")
-					_, _ = io.Copy(channel, channel)
-					_ = channel.Close()
+					defer channel.Close()
+					shell(channel)
 				}()
 			case "window-change":
 				var size struct{ Cols, Rows, Width, Height uint32 }

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	gossh "golang.org/x/crypto/ssh"
+	"golang.org/x/text/encoding"
 )
 
 var (
@@ -32,12 +33,17 @@ type Terminal struct {
 	client    *gossh.Client
 	session   *gossh.Session
 	output    *io.PipeWriter
+	charset   encoding.Encoding
 	commands  chan terminalCommand
 	done      chan struct{}
 	closeOnce sync.Once
 }
 
 func OpenTerminal(ctx context.Context, spec Spec, rows, cols int) (*Terminal, error) {
+	return OpenTerminalWithEncoding(ctx, spec, rows, cols, "")
+}
+
+func OpenTerminalWithEncoding(ctx context.Context, spec Spec, rows, cols int, encodingName string) (*Terminal, error) {
 	if strings.TrimSpace(spec.Host) == "" || strings.TrimSpace(spec.Username) == "" {
 		return nil, errors.New("SSH host and username are required")
 	}
@@ -46,6 +52,10 @@ func OpenTerminal(ctx context.Context, spec Spec, rows, cols int) (*Terminal, er
 	}
 	if !validTerminalSize(rows, cols) {
 		return nil, errors.New("invalid SSH terminal size")
+	}
+	charset, err := terminalEncoding(encodingName)
+	if err != nil {
+		return nil, err
 	}
 	auth, err := buildAuthMethods(spec)
 	if err != nil {
@@ -125,7 +135,7 @@ func OpenTerminal(ctx context.Context, spec Spec, rows, cols int) (*Terminal, er
 		return nil, err
 	}
 	terminal := &Terminal{
-		Output: reader, client: client, session: session, output: writer,
+		Output: decodeTerminalOutput(reader, charset), client: client, session: session, output: writer, charset: charset,
 		commands: make(chan terminalCommand, 8), done: make(chan struct{}),
 	}
 	started = true
@@ -156,6 +166,18 @@ func (t *Terminal) run(stdin io.Writer) {
 }
 
 func (t *Terminal) Send(input []byte) error {
+	if len(input) == 0 || len(input) > MaxTerminalInput {
+		return errors.New("invalid SSH terminal input length")
+	}
+	encoded, err := encodeTerminalInput(input, t.charset)
+	if err != nil {
+		return err
+	}
+	return t.enqueue(terminalCommand{input: encoded})
+}
+
+// SendRaw forwards xterm's binary-mode reports without transcoding them.
+func (t *Terminal) SendRaw(input []byte) error {
 	if len(input) == 0 || len(input) > MaxTerminalInput {
 		return errors.New("invalid SSH terminal input length")
 	}

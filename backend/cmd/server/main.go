@@ -71,6 +71,7 @@ func main() {
 	log.Println("Shutting down WebDB Studio...")
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+	srv.CloseTerminals()
 	_ = httpServer.Shutdown(shutdownCtx)
 	pools.CloseAll()
 }

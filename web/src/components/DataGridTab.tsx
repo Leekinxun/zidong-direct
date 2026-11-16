@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowDown,
   ArrowUp,
@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { api, ApiError } from '../api/client';
 import type { EngineType, FilterCondition, QueryResult, RowMutation } from '../types/db';
+import { useDatabaseFontSize, useWheelFontZoom } from '../useWheelFontZoom';
 import { ImportExportModal } from './ImportExportModal';
 
 interface Props {
@@ -76,6 +77,9 @@ export const DataGridTab: React.FC<Props> = ({
   const [editingCell, setEditingCell] = useState<EditingCell | null>(null);
   const [selectedCell, setSelectedCell] = useState<SelectedCellCoord | null>(null);
   const [ioModal, setIoModal] = useState<'export' | 'import' | null>(null);
+  const gridRef = useRef<HTMLDivElement | null>(null);
+  const [fontSize, adjustFontSize] = useDatabaseFontSize();
+  useWheelFontZoom(gridRef, adjustFontSize);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -539,16 +543,16 @@ export const DataGridTab: React.FC<Props> = ({
       )}
 
       {/* Main Spreadsheet Data Grid */}
-      <div className="flex-1 overflow-auto select-text">
+      <div ref={gridRef} className="flex-1 overflow-auto select-text">
         {loading && !result ? (
           <div className="flex h-full items-center justify-center text-sm text-slate-400">
             <Loader2 className="mr-2 h-4 w-4 animate-spin text-indigo-400" /> 正在查询表数据...
           </div>
         ) : result ? (
-          <table className="w-full border-collapse text-left text-[13.5px]">
+          <table className="w-full border-collapse text-left" style={{ fontSize }}>
             <thead className="sticky top-0 z-10 bg-slate-900">
               <tr>
-                <th className="w-14 border-b border-r border-slate-800 px-2.5 py-2.5 text-center font-mono text-xs text-slate-500">
+                <th className="w-14 border-b border-r border-slate-800 px-2.5 py-2.5 text-center font-mono text-[0.85em] text-slate-500">
                   #
                 </th>
                 {result.columns.map((col) => {
@@ -574,7 +578,7 @@ export const DataGridTab: React.FC<Props> = ({
                             <ArrowDown className="h-3.5 w-3.5 text-indigo-400" />
                           ))}
                       </div>
-                      {col.type && <div className="mt-0.5 text-[11.5px] font-normal text-slate-400">{col.type}</div>}
+                      {col.type && <div className="mt-0.5 text-[0.85em] font-normal text-slate-400">{col.type}</div>}
                     </th>
                   );
                 })}
@@ -621,7 +625,7 @@ export const DataGridTab: React.FC<Props> = ({
                                 if (e.key === 'Escape') setEditingCell(null);
                               }}
                               onBlur={() => commitCellEdit()}
-                              className="w-full rounded border border-indigo-500 bg-slate-900 px-2 py-1 text-[13.5px] text-slate-100 outline-none"
+                              className="w-full rounded border border-indigo-500 bg-slate-900 px-2 py-1 text-slate-100 outline-none"
                             />
                             <button
                               type="button"
@@ -664,7 +668,7 @@ export const DataGridTab: React.FC<Props> = ({
                   >
                     <td
                       onClick={() => setSelectedCell({ rowIdx, colIdx: 0 })}
-                      className="cursor-pointer border-b border-r border-slate-800/80 px-2.5 py-2 text-center font-mono text-xs text-slate-500"
+                      className="cursor-pointer border-b border-r border-slate-800/80 px-2.5 py-2 text-center font-mono text-[0.85em] text-slate-500"
                     >
                       {(page - 1) * pageSize + rowIdx + 1}
                     </td>
@@ -712,7 +716,7 @@ export const DataGridTab: React.FC<Props> = ({
                                   if (e.key === 'Escape') setEditingCell(null);
                                 }}
                                 onBlur={() => commitCellEdit()}
-                                className="w-full rounded border border-indigo-500 bg-slate-900 px-2 py-1 text-[13.5px] text-slate-100 outline-none"
+                                className="w-full rounded border border-indigo-500 bg-slate-900 px-2 py-1 text-slate-100 outline-none"
                               />
                               <button
                                 type="button"

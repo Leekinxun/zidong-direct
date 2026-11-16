@@ -17,6 +17,7 @@ require (
 	github.com/shakinm/xlsReader v0.9.12
 	github.com/sijms/go-ora/v2 v2.9.0
 	golang.org/x/crypto v0.55.0
+	golang.org/x/net v0.57.0
 	golang.org/x/sys v0.47.0
 	golang.org/x/text v0.41.0
 	modernc.org/sqlite v1.34.5

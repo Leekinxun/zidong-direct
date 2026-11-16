@@ -8,6 +8,7 @@ import { Clock, Download, Eraser, Loader2, Play, Sparkles, Terminal } from 'luci
 import { api, ApiError } from '../api/client';
 import { saveSqlHistoryItem, useSqlHistory } from '../preferences';
 import type { ConnectionView, EngineCapabilities, EngineType, QueryResult } from '../types/db';
+import { useDatabaseFontSize, useWheelFontZoom } from '../useWheelFontZoom';
 import { ImportExportModal } from './ImportExportModal';
 
 interface Props {
@@ -71,9 +72,13 @@ export const SqlWorkspace: React.FC<Props> = ({
   const supportsSchemas = capabilities[activeEngine]?.supportsSchemas ?? false;
 
   const editorHostRef = useRef<HTMLDivElement | null>(null);
+  const resultsRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
   const sqlCompartmentRef = useRef<Compartment>(new Compartment());
   const runRef = useRef<(selectedOnly: boolean) => void>(() => {});
+  const [fontSize, adjustFontSize] = useDatabaseFontSize();
+  useWheelFontZoom(editorHostRef, adjustFontSize);
+  useWheelFontZoom(resultsRef, adjustFontSize);
 
   const [sqlSchema, setSqlSchema] = useState<Record<string, string[]>>({});
   const [running, setRunning] = useState(false);
@@ -251,6 +256,13 @@ export const SqlWorkspace: React.FC<Props> = ({
       viewRef.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    view.dom.style.fontSize = `${fontSize}px`;
+    view.requestMeasure();
+  }, [fontSize]);
 
   // Reconfigure SQL dialect & autocomplete schema without wiping typed text
   useEffect(() => {
@@ -477,7 +489,7 @@ export const SqlWorkspace: React.FC<Props> = ({
       )}
 
       {/* Results area */}
-      <div className="flex min-h-0 flex-1 flex-col bg-slate-950">
+      <div ref={resultsRef} className="flex min-h-0 flex-1 flex-col bg-slate-950">
         {results.length > 0 ? (
           <>
             <div className="flex items-center gap-1 overflow-x-auto border-b border-slate-800 bg-slate-900/70 px-2 py-1">
@@ -512,7 +524,7 @@ export const SqlWorkspace: React.FC<Props> = ({
                 ) : currentResult.columns && currentResult.columns.length > 0 ? (
                   <>
                     <div className="flex-1 overflow-auto">
-                      <table className="w-full border-collapse text-left text-[13.5px]">
+                      <table className="w-full border-collapse text-left" style={{ fontSize }}>
                         <thead className="sticky top-0 z-10 bg-slate-900">
                           <tr>
                             <th className="border-b border-r border-slate-800 px-2.5 py-2.5 text-center font-medium text-slate-500">
@@ -524,7 +536,7 @@ export const SqlWorkspace: React.FC<Props> = ({
                                 className="whitespace-nowrap border-b border-r border-slate-800 px-3.5 py-2.5 font-medium text-slate-200"
                               >
                                 <div>{col.name}</div>
-                                {col.type && <div className="mt-0.5 text-[11.5px] font-normal text-slate-400">{col.type}</div>}
+                                {col.type && <div className="mt-0.5 text-[0.85em] font-normal text-slate-400">{col.type}</div>}
                               </th>
                             ))}
                           </tr>

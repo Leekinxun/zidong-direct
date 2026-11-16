@@ -67,6 +67,10 @@
 - **内置 Xshell 交互式 SSH 终端、独立主机管理与隧道代理**
   - 支持 SSH 密码认证与私钥认证（含私钥口令 Passphrase），所有密码/私钥口令框均支持点击眼睛图标切换明文显示，支持 SHA256 主机指纹校验，断开或删除连接时自动清理隧道资源。
   - **共区多页签与独立 SSH 主机存储**：SSH 终端与数据库页签共用中央工作区（切换页签保持后台会话不断开），支持左侧 **SSH 终端导航区** 管理已打开会话、**已保存的独立 SSH 主机**（AES-256-GCM 加密存储于 `/data/meta/ssh_hosts.json`）及**已启用 SSH 的数据库连接**；连接配置弹窗和直连表单均支持测试终端连接、一键另存为 SSH 主机及直接打开终端页签。
+  - 终端支持左右／上下分屏、拖动调节窗格、复用连接打开新页签，以及在新浏览器标签中打开独立终端页面。编码可选 UTF-8、GBK 和 GB18030，连接或重连时生效。
+  - 终端右键菜单支持复制、粘贴、粘贴选中文本、清屏、重连、断开、搜索和命令输入。在 Web 端，清屏、重连和断开分别使用 `Alt+Shift+K/R/W`，避开浏览器快捷键。剪贴板按钮取决于浏览器权限。多行粘贴需要确认。
+  - 在 SQL 编辑器、查询结果、表数据或终端上按住 Ctrl（macOS 也可用 Command）并滚动滚轮可缩放字体。数据库和终端字号独立记忆。
+  - 「通过 SSH 访问网页」提供在本机启动 SOCKS5 转发的参数。需要客户端能直接连接该 SSH 主机，然后手动启动独立 Chrome 配置。
   - 原生支持选中后按 **`Ctrl + Shift + C` 复制**、**`Ctrl + Shift + V` 粘贴**（含多行粘贴安全确认、`Ctrl + C` 中断信号及快捷复制/粘贴/清屏按钮）。
 - **Navicat 全格式数据导入与导出向导**
   - **导出（13 种格式）**：支持导出表数据（含当前筛选与排序）或任意 SQL 查询结果为 `CSV`、`TXT（分隔或定宽文本）`、`TSV`、`JSON`、`JSON Lines (.jsonl)`、`XML`、`HTML 表格`、`SQL INSERT 脚本`、`Excel (.xlsx / .xls)`、`OpenDocument (.ods)`、`dBASE (.dbf)` 与 `Apache Parquet (.parquet)`；支持写入 UTF-8 BOM 防 Win7 Excel 中文乱码。
@@ -107,8 +111,22 @@ docker compose up -d --build
 | `APP_AUTH_DISABLED` | `false` | 设为 `true` 时关闭工作台登录验证（仅建议本机测试环境使用） |
 | `APP_SECRET_KEY` | 空 | 主加密密钥（用于连接凭据与 Cookie 签名）；留空时首次启动自动生成并持久化到 `/data/meta/.master.key` |
 | `MAX_QUERY_ROWS` | `1000` | 单次 SQL 查询允许返回的最大行数上限 |
+| `MAX_TERMINAL_SESSIONS` | `16` | 每个服务实例同时打开的 SSH 终端会话数 |
 | `MAX_UPLOAD_BYTES` | `268435456` (256 MB) | SQLite / 导入文件上传大小上限（字节） |
 | `QUERY_TIMEOUT_SECONDS` | `60` | SQL 查询默认超时时间（秒） |
+
+使用 Nginx 反向代理时，请在工作台对应的代理配置中转发 WebSocket 升级头并保留浏览器访问时的 Host。下面以 Nginx 与工作台运行在同一台机器为例。
+
+```nginx
+location /api/terminal/ {
+    proxy_pass http://127.0.0.1:8080;
+    proxy_http_version 1.1;
+    proxy_set_header Host $http_host;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_read_timeout 3600s;
+}
+```
 
 #### 3. 卸载与清理数据
 
@@ -215,7 +233,7 @@ Its layout draws inspiration from classic desktop clients like Navicat paired wi
 - **SQL Query Workbench**: CodeMirror 6 editor with engine-specific SQL dialect highlighting, table/column autocomplete, `Ctrl+Enter` / `Cmd+Enter` execution, selection-only execution, semicolon statement batching, multi-result tabs, and local query history.
 - **Visual Table Designer**: Create or alter tables (columns, type suggestions, PK, auto-increment, defaults, PG 12–18 generated columns, table & column comments, indexes, foreign keys) with live diff DDL preview and freely resizable column widths & field input box dimensions (both width and height).
 - **Table & Database Comments**: View and edit both table/view comments and database-level comments across the sidebar tree, object browser (list & grid views), table designer, and right-hand inspector pane.
-- **Built-in Xshell Interactive SSH Terminal, Standalone Host Store & Tunneling**: Password or private key auth (with optional passphrase, eye-icon password visibility toggle, and SHA256 host key verification); SSH terminal tabs share the main workspace with database tabs while keeping sessions alive in the background, paired with a dedicated sidebar section for **saved standalone SSH hosts**, active sessions, and saved DB SSH tunnels, plus terminal connection testing and `Ctrl + Shift + C / V` copy/paste.
+- **Interactive SSH terminal** supports saved SSH hosts, native terminal authentication, split panes, standalone browser tabs, search, command input and connection reuse. Choose UTF-8, GBK or GB18030 when connecting. Ctrl-wheel (or Command-wheel on macOS) adjusts database and terminal font sizes independently. The Web interface includes instructions for using a local SSH SOCKS5 tunnel with Chrome.
 - **Navicat-Class Import & Export Wizard**: Export tables or SQL results across **13 formats** (`CSV` with optional UTF-8 BOM, `TXT` delimited/fixed-width, `TSV`, `JSON`, `JSONL`, `XML`, `HTML`, `SQL INSERT`, `Excel .xlsx/.xls`, `ODS`, `dBASE .dbf`, and `Parquet`); import from local files, clipboard paste, public HTTP(S) URLs, or Windows ODBC across `CSV`, `TXT/Fixed-Width`, `TSV`, `Excel (.xlsx/.xlsm/.xls)`, `ODS`, `JSON`, `JSONL`, `XML`, `HTML Table (.html)`, `dBASE (.dbf)`, `Parquet (.parquet)`, `SQLite (.sqlite/.db)`, `Access (.mdb/.accdb)`, and `.sql` scripts with column mapping and 6 write modes (`Append`, `Update`, `Upsert`, `Skip`, `Delete`, `Replace`).
 - **One-Click Uninstallation & Workspace Reset**: Reset connections, managed SQLite files, and browser cache directly from the in-app **Uninstall / Reset** dialog, or run [`./uninstall.sh`](./uninstall.sh) / [`.\uninstall.bat`](./uninstall.bat) (`--purge-data`) to remove containers, images, and persisted data.
 - **Security**: Stored database passwords and SSH private keys are encrypted at rest with **AES-256-GCM** and never returned in plaintext via API; optional signed-cookie authentication protects the workbench.
@@ -247,6 +265,7 @@ Default login credentials in [`docker-compose.yml`](./docker-compose.yml) (**cha
 | `APP_AUTH_DISABLED` | `false` | Set `true` to disable workbench login (trusted local testing only) |
 | `APP_SECRET_KEY` | empty | Master encryption/signing key; auto-generated to `/data/meta/.master.key` if unset |
 | `MAX_QUERY_ROWS` | `1000` | Maximum rows returned per SQL execution |
+| `MAX_TERMINAL_SESSIONS` | `16` | Concurrent SSH terminal sessions per server instance |
 | `MAX_UPLOAD_BYTES` | `268435456` (256 MB) | Upload size limit in bytes for SQLite / data imports |
 | `QUERY_TIMEOUT_SECONDS` | `60` | Default query execution timeout in seconds |
 

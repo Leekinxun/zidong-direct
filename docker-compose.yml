@@ -19,6 +19,7 @@ services:
       # 如仅在本机受信任环境测试且无需登录，可设为 "true"
       APP_AUTH_DISABLED: "false"
       MAX_QUERY_ROWS: "1000"
+      MAX_TERMINAL_SESSIONS: "${MAX_TERMINAL_SESSIONS:-16}"
       QUERY_TIMEOUT_SECONDS: "60"
     volumes:
       # 持久化保存加密后的连接配置、主密钥与 SQLite 数据库文件
