@@ -39,6 +39,10 @@ function isTerminalStream(url, origin) {
     && /^\/api\/terminal\/sessions\/[a-f0-9]{32}\/stream$/.test(url.pathname) && !url.search;
 }
 
+function themeBackground(theme) {
+  return theme === 'light' ? '#f5f6f8' : '#161618';
+}
+
 function downloadFilename(value) {
   let name = value.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').slice(0, 160).replace(/[ .]+$/g, '');
   if (!name) return 'export';
@@ -122,7 +126,7 @@ async function openWindow(origin, token, terminalOnly = false) {
     height: terminalOnly ? 700 : 820,
     minWidth: terminalOnly ? 520 : 860,
     minHeight: terminalOnly ? 400 : 580,
-    backgroundColor: '#161618',
+    backgroundColor: themeBackground(preferences?.get().theme),
     webPreferences: {
       session: workbenchSession,
       preload: path.join(__dirname, 'preload.cjs'),
@@ -228,6 +232,14 @@ function registerWorkbenchHandlers() {
   ipcMain.handle('preferences:sidebar-width', fromWorkbench((width) => preferences.setSidebarWidth(width)));
   ipcMain.handle('preferences:sql-history', fromWorkbench((history) => preferences.setSqlHistory(history)));
   ipcMain.handle('preferences:font-size', fromWorkbench(({ preference, size } = {}) => preferences.setFontSize(preference, size)));
+  ipcMain.handle('preferences:theme', fromWorkbench(async (theme) => {
+    await preferences.setTheme(theme);
+    for (const { win } of workbenchWindows.values()) {
+      if (win.isDestroyed() || win.webContents.isDestroyed()) continue;
+      win.setBackgroundColor(themeBackground(theme));
+      win.webContents.send('preferences:theme-changed', theme);
+    }
+  }));
   ipcMain.handle('terminal:open-window', fromWorkbench(openTerminalWindow));
   ipcMain.handle('terminal:paste', fromWorkbench((_value, { win }) => {
     if (!win.isFocused()) throw new Error('请先聚焦终端窗口');

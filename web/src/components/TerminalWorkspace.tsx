@@ -24,6 +24,8 @@ import { FitAddon } from '@xterm/addon-fit';
 import { SearchAddon } from '@xterm/addon-search';
 import { Terminal } from '@xterm/xterm';
 import '@xterm/xterm/css/xterm.css';
+import { useTheme } from '../theme';
+import { terminalTheme, terminalSearchTheme } from '../widgetThemes';
 import type { ConnectionView, SSHHostSaveInput, SSHHostView } from '../types/db';
 import { useTerminalFontSize, useWheelFontZoom } from '../useWheelFontZoom';
 import { DirectSSHForm } from './DirectSSHForm';
@@ -56,14 +58,7 @@ interface ContextMenuState {
 const isMac = typeof navigator !== 'undefined' && /Mac|iPod|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 const maxPasteBytes = 64 * 1024;
 const encoder = new TextEncoder();
-const searchDecorations = {
-  matchBackground: '#344775',
-  matchBorder: '#4a6baf',
-  matchOverviewRuler: '#344775',
-  activeMatchBackground: '#e5a50a',
-  activeMatchBorder: '#ffd700',
-  activeMatchColorOverviewRuler: '#e5a50a',
-};
+
 
 function savedOption(
   key: string,
@@ -132,6 +127,9 @@ export function TerminalWorkspace({
   const toggleCommandBarRef = useRef<(() => void) | null>(null);
 
   const [fontSize, adjustFontSize] = useTerminalFontSize();
+  const theme = useTheme();
+  const themeRef = useRef(theme);
+  themeRef.current = theme;
   const [encoding, setEncoding] = useState<TerminalEncoding>(initialEncoding);
   const [browserForm, setBrowserForm] = useState(false);
   const [browserURL, setBrowserURL] = useState('');
@@ -199,7 +197,7 @@ export function TerminalWorkspace({
         fontSize: fontSizeRef.current,
         linkHandler: { activate: () => {} },
         scrollback: 3000,
-        theme: { background: '#10141c', foreground: '#d9e3f4', cursor: '#a3bfff', selectionBackground: '#344775' },
+        theme: terminalTheme(themeRef.current),
       });
       terminalRef.current = terminal;
       const fit = new FitAddon();
@@ -337,6 +335,13 @@ export function TerminalWorkspace({
       dispose?.();
     };
   }, []);
+
+  useEffect(() => {
+    const terminal = terminalRef.current;
+    if (!terminal) return;
+    terminal.options.theme = terminalTheme(theme);
+    if (terminal.rows > 0) terminal.refresh(0, terminal.rows - 1);
+  }, [theme]);
 
   useEffect(() => {
     fontSizeRef.current = fontSize;
@@ -591,13 +596,17 @@ export function TerminalWorkspace({
       }
     }
     try {
-      const options = { caseSensitive: caseSens, regex, incremental, decorations: searchDecorations };
+      const options = { caseSensitive: caseSens, regex, incremental, decorations: terminalSearchTheme(themeRef.current) };
       if (previous) search.findPrevious(term, options);
       else search.findNext(term, options);
     } catch {
       clearSearchResult('终端搜索失败');
     }
   }, []);
+
+  useEffect(() => {
+    if (searchOpen && searchQuery) performSearch(searchQuery, caseSensitive, useRegex, true);
+  }, [theme, searchOpen, searchQuery, caseSensitive, useRegex, performSearch]);
 
   const openSearch = useCallback((initialQuery?: string) => {
     setContextMenu(null);
@@ -727,8 +736,8 @@ export function TerminalWorkspace({
     : destination?.unverified;
 
   return (
-    <section ref={paneRef} aria-label="SSH 终端" className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-[#161618]">
-      <header className="flex shrink-0 flex-wrap items-center gap-2 border-b border-white/[0.08] bg-[#1e1e21] px-3 py-2 text-xs">
+    <section ref={paneRef} aria-label="SSH 终端" className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-surface-base">
+      <header className="flex shrink-0 flex-wrap items-center gap-2 border-b border-interaction/[0.08] bg-surface-panel px-3 py-2 text-xs">
         <select
           aria-label="SSH 连接方式"
           value={source}
@@ -775,19 +784,19 @@ export function TerminalWorkspace({
               onClick={() => {
                 if (selected) connect(selected.target, selected.label, selected.unverified);
               }}
-              className="rounded bg-indigo-600 px-3 py-1.5 font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+              className="rounded bg-indigo-600 px-3 py-1.5 font-medium text-on-accent hover:bg-indigo-500 disabled:opacity-50"
             >
               连接
             </button>
           </>
         )}
         {status !== 'idle' && (
-          <button type="button" onClick={disconnect} className="rounded bg-slate-700 px-3 py-1.5 font-medium text-white hover:bg-slate-600">
+          <button type="button" onClick={disconnect} className="rounded bg-slate-700 px-3 py-1.5 font-medium text-strong hover:bg-slate-600">
             {status === 'connecting' ? '取消' : '断开'}
           </button>
         )}
         {status === 'idle' && source === 'direct' && showLastOutput && (
-          <button type="button" onClick={() => setShowLastOutput(false)} className="rounded bg-slate-700 px-3 py-1.5 font-medium text-white hover:bg-slate-600">
+          <button type="button" onClick={() => setShowLastOutput(false)} className="rounded bg-slate-700 px-3 py-1.5 font-medium text-strong hover:bg-slate-600">
             返回连接设置
           </button>
         )}
@@ -813,12 +822,12 @@ export function TerminalWorkspace({
             <>
               <button type="button" aria-label="垂直分屏" title="垂直分屏（左右排列）"
                 onClick={() => onSplit('columns', currentOrSelectedTarget?.target, encoding)}
-                className="rounded p-1.5 text-slate-400 hover:bg-white/10 hover:text-white">
+                className="rounded p-1.5 text-slate-400 hover:bg-interaction/10 hover:text-strong">
                 <Columns2 className="h-4 w-4" />
               </button>
               <button type="button" aria-label="水平分屏" title="水平分屏（上下排列）"
                 onClick={() => onSplit('rows', currentOrSelectedTarget?.target, encoding)}
-                className="rounded p-1.5 text-slate-400 hover:bg-white/10 hover:text-white">
+                className="rounded p-1.5 text-slate-400 hover:bg-interaction/10 hover:text-strong">
                 <Rows2 className="h-4 w-4" />
               </button>
             </>
@@ -826,20 +835,20 @@ export function TerminalWorkspace({
           {window.zidongDesktop && (
             <button type="button" aria-label="通过服务器代理 Chrome" title="通过服务器代理 Chrome"
               disabled={!hasTarget} onClick={() => setBrowserForm((open) => !open)}
-              className="rounded p-1.5 text-slate-400 hover:bg-white/10 hover:text-white disabled:opacity-40">
+              className="rounded p-1.5 text-slate-400 hover:bg-interaction/10 hover:text-strong disabled:opacity-40">
               <ExternalLink className="h-4 w-4" />
             </button>
           )}
           {onClosePane && (
             <button type="button" aria-label="关闭分屏" title="关闭分屏" onClick={onClosePane}
-              className="rounded p-1.5 text-slate-400 hover:bg-white/10 hover:text-white">
+              className="rounded p-1.5 text-slate-400 hover:bg-interaction/10 hover:text-strong">
               <X className="h-4 w-4" />
             </button>
           )}
         </div>
       </header>
       {browserForm && (
-        <form onSubmit={(event) => void openBrowserProxy(event)} className="flex flex-wrap items-center gap-2 border-b border-white/10 bg-[#1e1e21] px-3 py-2 text-xs">
+        <form onSubmit={(event) => void openBrowserProxy(event)} className="flex flex-wrap items-center gap-2 border-b border-interaction/10 bg-surface-panel px-3 py-2 text-xs">
           <input
             type="url"
             aria-label="通过 SSH 访问的网址"
@@ -851,7 +860,7 @@ export function TerminalWorkspace({
           <button type="submit" disabled={launchingBrowser || !hasTarget} className="rounded bg-indigo-600 px-2.5 py-1.5 disabled:opacity-40">
             {launchingBrowser ? '正在打开…' : '打开代理浏览器'}
           </button>
-          <button type="button" aria-label="取消打开代理浏览器" onClick={() => setBrowserForm(false)} className="rounded p-1 text-slate-400 hover:text-white">
+          <button type="button" aria-label="取消打开代理浏览器" onClick={() => setBrowserForm(false)} className="rounded p-1 text-slate-400 hover:text-strong">
             <X className="h-4 w-4" />
           </button>
         </form>
@@ -871,10 +880,10 @@ export function TerminalWorkspace({
           ssh.insecureIgnoreHostKey && !ssh.hostKeyFingerprint,
         )}
       />
-      <div className={directFormVisible ? 'hidden' : 'relative min-h-0 min-w-0 flex-1 overflow-hidden bg-[#10141c] p-3'}>
+      <div className={directFormVisible ? 'hidden' : 'relative min-h-0 min-w-0 flex-1 overflow-hidden bg-surface-terminal p-3'}>
         <div ref={viewport} className="h-full w-full" aria-label="终端输入与输出" />
         {searchOpen && (
-          <div className="absolute inset-x-2 top-2 z-20 ml-auto flex max-w-sm flex-wrap items-center gap-1.5 rounded-xl border border-white/[0.12] bg-[#1e1e22]/95 px-3 py-1.5 text-xs text-slate-200 shadow-2xl backdrop-blur-2xl">
+          <div className="absolute inset-x-2 top-2 z-20 ml-auto flex max-w-sm flex-wrap items-center gap-1.5 rounded-xl border border-interaction/[0.12] bg-surface-popup/95 px-3 py-1.5 text-xs text-slate-200 shadow-2xl backdrop-blur-2xl">
             <Search className="h-3.5 w-3.5 shrink-0 text-slate-400" />
             <input
               ref={searchInputRef}
@@ -892,7 +901,7 @@ export function TerminalWorkspace({
                   : '无结果')}
               </span>
             )}
-            <div className="mx-0.5 h-4 w-[1px] bg-white/[0.12]" />
+            <div className="mx-0.5 h-4 w-[1px] bg-interaction/[0.12]" />
             <button
               type="button"
               title="区分大小写 (Alt+C)"
@@ -900,7 +909,7 @@ export function TerminalWorkspace({
               className={`rounded p-1 transition-colors ${
                 caseSensitive
                   ? 'bg-indigo-600/40 text-indigo-300'
-                  : 'text-slate-400 hover:bg-white/[0.08] hover:text-slate-200'
+                  : 'text-slate-400 hover:bg-interaction/[0.08] hover:text-slate-200'
               }`}
             >
               <CaseSensitive className="h-3.5 w-3.5" />
@@ -912,7 +921,7 @@ export function TerminalWorkspace({
               className={`rounded p-1 transition-colors ${
                 useRegex
                   ? 'bg-indigo-600/40 text-indigo-300'
-                  : 'text-slate-400 hover:bg-white/[0.08] hover:text-slate-200'
+                  : 'text-slate-400 hover:bg-interaction/[0.08] hover:text-slate-200'
               }`}
             >
               <Regex className="h-3.5 w-3.5" />
@@ -922,7 +931,7 @@ export function TerminalWorkspace({
               title="上一个 (Shift+Enter)"
               onClick={findPrevious}
               disabled={!searchQuery}
-              className="rounded p-1 text-slate-400 transition-colors hover:bg-white/[0.08] hover:text-slate-200 disabled:opacity-30"
+              className="rounded p-1 text-slate-400 transition-colors hover:bg-interaction/[0.08] hover:text-slate-200 disabled:opacity-30"
             >
               <ChevronUp className="h-3.5 w-3.5" />
             </button>
@@ -931,7 +940,7 @@ export function TerminalWorkspace({
               title="下一个 (Enter)"
               onClick={findNext}
               disabled={!searchQuery}
-              className="rounded p-1 text-slate-400 transition-colors hover:bg-white/[0.08] hover:text-slate-200 disabled:opacity-30"
+              className="rounded p-1 text-slate-400 transition-colors hover:bg-interaction/[0.08] hover:text-slate-200 disabled:opacity-30"
             >
               <ChevronDown className="h-3.5 w-3.5" />
             </button>
@@ -939,7 +948,7 @@ export function TerminalWorkspace({
               type="button"
               title="关闭查找 (Esc)"
               onClick={closeSearch}
-              className="rounded p-1 text-slate-400 transition-colors hover:bg-white/[0.08] hover:text-slate-200"
+              className="rounded p-1 text-slate-400 transition-colors hover:bg-interaction/[0.08] hover:text-slate-200"
             >
               <X className="h-3.5 w-3.5" />
             </button>
@@ -949,12 +958,12 @@ export function TerminalWorkspace({
       {pendingPaste !== null && (
         <div role="alert" className="flex flex-wrap items-center gap-2 border-t border-amber-700/60 bg-amber-950/50 px-4 py-2 text-xs text-amber-100">
           <span className="flex-1">剪贴板内容含换行或控制字符，粘贴可能执行多条命令。</span>
-          <button type="button" onClick={() => finishPaste(false)} className="rounded bg-slate-700 px-2 py-1 text-white">取消</button>
-          <button type="button" onClick={() => finishPaste(true)} className="rounded bg-amber-600 px-2 py-1 font-medium text-white">继续粘贴</button>
+          <button type="button" onClick={() => finishPaste(false)} className="rounded bg-slate-700 px-2 py-1 text-strong">取消</button>
+          <button type="button" onClick={() => finishPaste(true)} className="rounded bg-amber-600 px-2 py-1 font-medium text-on-accent">继续粘贴</button>
         </div>
       )}
       {commandBarOpen && (
-        <div className="flex shrink-0 flex-wrap items-center gap-2 border-t border-white/[0.08] bg-[#19191c] px-4 py-2">
+        <div className="flex shrink-0 flex-wrap items-center gap-2 border-t border-interaction/[0.08] bg-surface-command px-4 py-2">
           <div className="flex select-none items-center gap-1.5 text-xs text-indigo-400">
             <TerminalSquare className="h-4 w-4" />
             <span className="font-semibold">命令</span>
@@ -982,7 +991,7 @@ export function TerminalWorkspace({
             <button
               type="submit"
               disabled={!commandText || status !== 'connected'}
-              className="flex items-center gap-1 rounded bg-indigo-600 px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-indigo-500 disabled:opacity-40"
+              className="flex items-center gap-1 rounded bg-indigo-600 px-3 py-1 text-xs font-medium text-on-accent transition-colors hover:bg-indigo-500 disabled:opacity-40"
             >
               <span>发送</span>
               <CornerDownLeft className="h-3 w-3" />
@@ -991,7 +1000,7 @@ export function TerminalWorkspace({
               type="button"
               title="关闭命令输入 (Esc)"
               onClick={closeCommandBar}
-              className="rounded p-1 text-slate-400 transition-colors hover:bg-white/[0.08] hover:text-slate-200"
+              className="rounded p-1 text-slate-400 transition-colors hover:bg-interaction/[0.08] hover:text-slate-200"
             >
               <X className="h-3.5 w-3.5" />
             </button>
@@ -1005,7 +1014,7 @@ export function TerminalWorkspace({
             left: Math.max(10, Math.min(contextMenu.x, window.innerWidth - 240)),
           }}
           onClick={(e) => e.stopPropagation()}
-          className="fixed z-50 max-h-[calc(100vh-20px)] w-56 overflow-y-auto rounded-xl border border-white/[0.12] bg-[#1e1e22]/95 p-1.5 text-xs text-slate-200 shadow-2xl backdrop-blur-2xl"
+          className="fixed z-50 max-h-[calc(100vh-20px)] w-56 overflow-y-auto rounded-xl border border-interaction/[0.12] bg-surface-popup/95 p-1.5 text-xs text-slate-200 shadow-2xl backdrop-blur-2xl"
         >
           <div className="px-2.5 py-1 text-[11px] font-medium text-slate-400">操作</div>
           <button
@@ -1015,12 +1024,12 @@ export function TerminalWorkspace({
             className={`group flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-xs transition-colors ${
               !contextMenu.hasSelection
                 ? 'cursor-not-allowed text-slate-500 opacity-40'
-                : 'cursor-pointer text-slate-200 hover:bg-[#0a84ff] hover:text-white'
+                : 'cursor-pointer text-slate-200 hover:bg-accent hover:text-on-accent'
             }`}
           >
             <Copy className="h-3.5 w-3.5 shrink-0 opacity-80" />
             <span className="flex-1 truncate">复制</span>
-            <span className="ml-auto font-mono text-[10.5px] text-slate-400 group-hover:text-white/80">
+            <span className="ml-auto font-mono text-[10.5px] text-slate-400 group-hover:text-on-accent/80">
               {isMac ? '⌘+⇧+C' : 'Ctrl+Shift+C'}
             </span>
           </button>
@@ -1031,12 +1040,12 @@ export function TerminalWorkspace({
             className={`group flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-xs transition-colors ${
               status !== 'connected' || Boolean(terminalRef.current?.options.disableStdin)
                 ? 'cursor-not-allowed text-slate-500 opacity-40'
-                : 'cursor-pointer text-slate-200 hover:bg-[#0a84ff] hover:text-white'
+                : 'cursor-pointer text-slate-200 hover:bg-accent hover:text-on-accent'
             }`}
           >
             <Clipboard className="h-3.5 w-3.5 shrink-0 opacity-80" />
             <span className="flex-1 truncate">粘贴</span>
-            <span className="ml-auto font-mono text-[10.5px] text-slate-400 group-hover:text-white/80">
+            <span className="ml-auto font-mono text-[10.5px] text-slate-400 group-hover:text-on-accent/80">
               {isMac ? '⌘+⇧+V' : 'Ctrl+Shift+V'}
             </span>
           </button>
@@ -1047,7 +1056,7 @@ export function TerminalWorkspace({
             className={`group flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-xs transition-colors ${
               status !== 'connected' || Boolean(terminalRef.current?.options.disableStdin) || !contextMenu.hasSelection
                 ? 'cursor-not-allowed text-slate-500 opacity-40'
-                : 'cursor-pointer text-slate-200 hover:bg-[#0a84ff] hover:text-white'
+                : 'cursor-pointer text-slate-200 hover:bg-accent hover:text-on-accent'
             }`}
           >
             <ClipboardPaste className="h-3.5 w-3.5 shrink-0 opacity-80" />
@@ -1056,15 +1065,15 @@ export function TerminalWorkspace({
           <button
             type="button"
             onClick={() => openSearch()}
-            className="group flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-xs text-slate-200 transition-colors hover:bg-[#0a84ff] hover:text-white"
+            className="group flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-xs text-slate-200 transition-colors hover:bg-accent hover:text-on-accent"
           >
             <Search className="h-3.5 w-3.5 shrink-0 opacity-80" />
             <span className="flex-1 truncate">搜索</span>
-            <span className="ml-auto font-mono text-[10.5px] text-slate-400 group-hover:text-white/80">
+            <span className="ml-auto font-mono text-[10.5px] text-slate-400 group-hover:text-on-accent/80">
               {isMac ? '⌘+F' : 'Ctrl+F'}
             </span>
           </button>
-          <div className="my-1 border-t border-white/[0.08]" />
+          <div className="my-1 border-t border-interaction/[0.08]" />
           <button
             type="button"
             disabled={!hasTarget || !onCloneTerminal}
@@ -1072,7 +1081,7 @@ export function TerminalWorkspace({
             className={`group flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-xs transition-colors ${
               !hasTarget || !onCloneTerminal
                 ? 'cursor-not-allowed text-slate-500 opacity-40'
-                : 'cursor-pointer text-slate-200 hover:bg-[#0a84ff] hover:text-white'
+                : 'cursor-pointer text-slate-200 hover:bg-accent hover:text-on-accent'
             }`}
           >
             <CopyPlus className="h-3.5 w-3.5 shrink-0 opacity-80" />
@@ -1085,23 +1094,23 @@ export function TerminalWorkspace({
             className={`group flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-xs transition-colors ${
               !hasTarget
                 ? 'cursor-not-allowed text-slate-500 opacity-40'
-                : 'cursor-pointer text-slate-200 hover:bg-[#0a84ff] hover:text-white'
+                : 'cursor-pointer text-slate-200 hover:bg-accent hover:text-on-accent'
             }`}
           >
             <RotateCw className="h-3.5 w-3.5 shrink-0 opacity-80" />
             <span className="flex-1 truncate">重新连接</span>
-            <span className="ml-auto font-mono text-[10.5px] text-slate-400 group-hover:text-white/80">
+            <span className="ml-auto font-mono text-[10.5px] text-slate-400 group-hover:text-on-accent/80">
               {isMac ? '⌘+R' : 'Ctrl+R'}
             </span>
           </button>
           <button
             type="button"
             onClick={handleClearScreen}
-            className="group flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-xs text-slate-200 transition-colors hover:bg-[#0a84ff] hover:text-white"
+            className="group flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-xs text-slate-200 transition-colors hover:bg-accent hover:text-on-accent"
           >
             <Trash2 className="h-3.5 w-3.5 shrink-0 opacity-80" />
             <span className="flex-1 truncate">清屏</span>
-            <span className="ml-auto font-mono text-[10.5px] text-slate-400 group-hover:text-white/80">
+            <span className="ml-auto font-mono text-[10.5px] text-slate-400 group-hover:text-on-accent/80">
               {isMac ? '⌘+K' : 'Ctrl+K'}
             </span>
           </button>
@@ -1112,16 +1121,16 @@ export function TerminalWorkspace({
             className={`group flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-xs transition-colors ${
               status === 'idle'
                 ? 'cursor-not-allowed text-slate-500 opacity-40'
-                : 'cursor-pointer text-slate-200 hover:bg-[#0a84ff] hover:text-white'
+                : 'cursor-pointer text-slate-200 hover:bg-accent hover:text-on-accent'
             }`}
           >
             <PowerOff className="h-3.5 w-3.5 shrink-0 opacity-80" />
             <span className="flex-1 truncate">断开连接</span>
-            <span className="ml-auto font-mono text-[10.5px] text-slate-400 group-hover:text-white/80">
+            <span className="ml-auto font-mono text-[10.5px] text-slate-400 group-hover:text-on-accent/80">
               {isMac ? '⌘+W' : 'Ctrl+W'}
             </span>
           </button>
-          <div className="my-1 border-t border-white/[0.08]" />
+          <div className="my-1 border-t border-interaction/[0.08]" />
           <button
             type="button"
             disabled={status !== 'connected'}
@@ -1129,18 +1138,18 @@ export function TerminalWorkspace({
             className={`group flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-xs transition-colors ${
               status !== 'connected'
                 ? 'cursor-not-allowed text-slate-500 opacity-40'
-                : 'cursor-pointer text-slate-200 hover:bg-[#0a84ff] hover:text-white'
+                : 'cursor-pointer text-slate-200 hover:bg-accent hover:text-on-accent'
             }`}
           >
             <TerminalSquare className="h-3.5 w-3.5 shrink-0 opacity-80" />
             <span className="flex-1 truncate">命令输入</span>
-            <span className="ml-auto font-mono text-[10.5px] text-slate-400 group-hover:text-white/80">
+            <span className="ml-auto font-mono text-[10.5px] text-slate-400 group-hover:text-on-accent/80">
               {isMac ? '⌥+I' : 'Alt+I'}
             </span>
           </button>
         </div>
       )}
-      <footer className="flex shrink-0 flex-wrap justify-between gap-2 border-t border-white/[0.08] bg-[#1e1e21] px-4 py-2 text-xs text-slate-400">
+      <footer className="flex shrink-0 flex-wrap justify-between gap-2 border-t border-interaction/[0.08] bg-surface-panel px-4 py-2 text-xs text-slate-400">
         <span role="status">{notice || (status === 'connected' ? '已连接' : status === 'connecting' ? '正在连接' : '未连接')}</span>
         <span>右键菜单 · 搜索 ({isMac ? '⌘F' : 'Ctrl+F'}) · 命令输入 ({isMac ? '⌥I' : 'Alt+I'}) · Ctrl+滚轮 调整字号 ({fontSize}px)</span>
       </footer>

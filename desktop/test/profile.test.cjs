@@ -55,6 +55,32 @@ test('persists independent database and terminal font sizes', async (t) => {
   assert.throws(() => preferences.setFontSize('sidebarWidth', 12), RangeError);
 });
 
+test('persists theme with existing profile preferences and rejects unknown themes', async (t) => {
+  const dir = await createProfile(t);
+  await fs.writeFile(path.join(dir, 'preferences.json'), JSON.stringify({ sidebarWidth: 380 }));
+  const preferences = await openPreferences(dir);
+  assert.equal(preferences.get().theme, undefined);
+  await Promise.all([
+    preferences.setTheme('light'),
+    preferences.setFontSize('terminalFontSize', 18),
+  ]);
+  assert.deepEqual((await openPreferences(dir)).get(), {
+    sidebarWidth: 380, theme: 'light', terminalFontSize: 18,
+  });
+  for (const invalid of ['system', '', null, {}, 1]) {
+    assert.throws(() => preferences.setTheme(invalid), RangeError);
+  }
+  assert.equal((await openPreferences(dir)).get().theme, 'light');
+  await preferences.setTheme('dark');
+  assert.equal((await openPreferences(dir)).get().theme, 'dark');
+});
+
+test('ignores invalid stored theme without discarding valid preferences', async (t) => {
+  const dir = await createProfile(t);
+  await fs.writeFile(path.join(dir, 'preferences.json'), JSON.stringify({ theme: 'unknown', sidebarWidth: 420 }));
+  assert.deepEqual((await openPreferences(dir)).get(), { sidebarWidth: 420 });
+});
+
 test('preserves the imported key until backend readiness is confirmed', async (t) => {
   const dir = await createProfile(t);
   const metaDir = path.join(dir, 'meta');

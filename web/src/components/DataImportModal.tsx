@@ -503,7 +503,7 @@ export function DataImportModal({ connectionId, database, schema, table, onClose
               预览和映射
             </button>
           )}
-          <button type="button" onClick={submit} disabled={Boolean(working) || !ready} className="flex items-center gap-1.5 rounded bg-indigo-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-indigo-500 disabled:opacity-50">
+          <button type="button" onClick={submit} disabled={Boolean(working) || !ready} className="flex items-center gap-1.5 rounded bg-indigo-600 px-4 py-1.5 text-xs font-medium text-on-accent hover:bg-indigo-500 disabled:opacity-50">
             {working === 'import' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
             {script ? '执行 SQL 脚本' : '开始导入'}
           </button>

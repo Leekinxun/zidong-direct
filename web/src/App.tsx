@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { api } from './api/client';
 import { BrandLogo } from './components/BrandLogo';
+import { ThemeSwitcher } from './components/ThemeSwitcher';
 import { ConnectionModal } from './components/ConnectionModal';
 import { DataGridTab } from './components/DataGridTab';
 import { ImportExportModal } from './components/ImportExportModal';
@@ -390,7 +391,7 @@ export default function App() {
 
   if (authLoading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-[#161618] text-xs font-medium text-[#9e9ea9]">
+      <div className="flex h-screen items-center justify-center bg-surface-base text-xs font-medium text-content-muted">
         正在加载 紫东直连...
       </div>
     );
@@ -420,24 +421,27 @@ export default function App() {
   );
 
   return (
-    <div className="flex h-screen flex-col bg-[#161618] text-[#f2f2f7] select-none">
+    <div className="flex h-screen flex-col bg-surface-base text-content select-none">
       {/* Apple macOS Unified Vibrancy Toolbar */}
       {standaloneTerminal ? (
-        <header className="flex shrink-0 items-center justify-between border-b border-white/[0.08] bg-[#212124] px-4 py-2 text-sm">
+        <header className="flex shrink-0 items-center justify-between border-b border-interaction/[0.08] bg-surface-toolbar px-4 py-2 text-sm">
           <span className="font-semibold">SSH 终端</span>
+          <div className="flex items-center gap-2">
+          <ThemeSwitcher />
           <button type="button" className="apple-btn-secondary" onClick={() => void openTerminalWindow()}>
             <ExternalLink className="h-4 w-4" /> 新终端窗口
           </button>
+          </div>
         </header>
       ) : (
-      <header className="flex h-16 shrink-0 items-center justify-between border-b border-white/[0.08] bg-[#212124]/95 px-4 backdrop-blur-xl">
+      <header className="flex h-16 shrink-0 items-center justify-between border-b border-interaction/[0.08] bg-surface-toolbar/95 px-4 backdrop-blur-xl">
         <div className="flex items-center gap-1.5">
           {/* App Brand */}
-          <div className="mr-2.5 flex items-center gap-3 border-r border-white/[0.08] pr-4">
+          <div className="mr-2.5 flex items-center gap-3 border-r border-interaction/[0.08] pr-4">
             <BrandLogo className="h-9 w-9 shrink-0 drop-shadow-sm" />
             <div>
-              <div className="text-[15px] font-semibold tracking-tight text-white">紫东直连</div>
-              <div className="text-[11.5px] font-normal text-[#9e9ea9]">多源数据库直连工作台</div>
+              <div className="text-[15px] font-semibold tracking-tight text-strong">紫东直连</div>
+              <div className="text-[11.5px] font-normal text-content-muted">多源数据库直连工作台</div>
             </div>
           </div>
 
@@ -449,7 +453,7 @@ export default function App() {
               className="apple-toolbar-btn"
               title="新建数据库连接"
             >
-              <div className="flex items-center gap-0.5 text-[#52a9ff]">
+              <div className="flex items-center gap-0.5 text-icon-blue">
                 <Database className="h-5 w-5" strokeWidth={1.8} />
                 <ChevronDown className="h-3.5 w-3.5 opacity-80" />
               </div>
@@ -457,8 +461,8 @@ export default function App() {
             </button>
 
             {connMenuOpen && (
-              <div className="absolute left-0 top-14 z-50 w-64 rounded-xl border border-white/[0.12] bg-[#2a2a2e]/95 p-1.5 text-[13.5px] shadow-2xl backdrop-blur-2xl">
-                <div className="px-3 py-1.5 text-xs font-medium text-[#9e9ea9]">
+              <div className="absolute left-0 top-14 z-50 w-64 rounded-xl border border-interaction/[0.12] bg-surface-menu/95 p-1.5 text-[13.5px] shadow-2xl backdrop-blur-2xl">
+                <div className="px-3 py-1.5 text-xs font-medium text-content-muted">
                   新建数据库连接
                 </div>
                 {ENGINE_MENU_ITEMS.map((item) => (
@@ -469,10 +473,10 @@ export default function App() {
                       setConnMenuOpen(false);
                       openNewConnectionModal(item.engine);
                     }}
-                    className="flex w-full items-center justify-between rounded-[8px] px-3 py-2 text-left font-medium text-[#f2f2f7] transition-colors hover:bg-[#0a84ff] hover:text-white"
+                    className="flex w-full items-center justify-between rounded-[8px] px-3 py-2 text-left font-medium text-content transition-colors hover:bg-accent hover:text-on-accent"
                   >
                     <span>{item.label}</span>
-                    <span className="rounded bg-white/[0.08] px-1.5 py-0.5 font-mono text-xs text-[#cacad1]">
+                    <span className="rounded bg-interaction/[0.08] px-1.5 py-0.5 font-mono text-xs text-content-label group-hover:text-on-accent">
                       {item.badge}
                     </span>
                   </button>
@@ -488,7 +492,7 @@ export default function App() {
             className="apple-toolbar-btn"
             title="新建 SQL 查询窗口"
           >
-            <Terminal className="h-5 w-5 text-[#30d158]" strokeWidth={1.8} />
+            <Terminal className="h-5 w-5 text-icon-green" strokeWidth={1.8} />
             <span className="text-[12.5px] font-medium">新建查询</span>
           </button>
           {isDesktop && (
@@ -498,12 +502,12 @@ export default function App() {
               className="apple-toolbar-btn"
               title="打开 SSH 终端"
             >
-              <Terminal className="h-5 w-5 text-[#64d2ff]" strokeWidth={1.8} />
+              <Terminal className="h-5 w-5 text-icon-cyan" strokeWidth={1.8} />
               <span className="text-[12.5px] font-medium">SSH 终端</span>
             </button>
           )}
 
-          <div className="mx-1.5 h-7 w-px bg-white/[0.08]" />
+          <div className="mx-1.5 h-7 w-px bg-interaction/[0.08]" />
 
           {/* 3. 表总览 (Tables Overview - Only opens when explicitly clicked) */}
           <button
@@ -514,7 +518,7 @@ export default function App() {
             }`}
             title="打开当前数据库表对象列表"
           >
-            <Table2 className="h-5 w-5 text-[#64d2ff]" strokeWidth={1.8} />
+            <Table2 className="h-5 w-5 text-icon-cyan" strokeWidth={1.8} />
             <span className="text-[12.5px] font-medium">表总览</span>
           </button>
 
@@ -527,7 +531,7 @@ export default function App() {
             }`}
             title="打开当前数据库视图列表"
           >
-            <Eye className="h-5 w-5 text-[#5ac8fa]" strokeWidth={1.8} />
+            <Eye className="h-5 w-5 text-icon-teal" strokeWidth={1.8} />
             <span className="text-[12.5px] font-medium">视图</span>
           </button>
 
@@ -540,11 +544,11 @@ export default function App() {
             }`}
             title="查看最近执行的 SQL 查询"
           >
-            <Layers className="h-5 w-5 text-[#ff9f0a]" strokeWidth={1.8} />
+            <Layers className="h-5 w-5 text-icon-orange" strokeWidth={1.8} />
             <span className="text-[12.5px] font-medium">查询历史</span>
           </button>
 
-          <div className="mx-1.5 h-7 w-px bg-white/[0.08]" />
+          <div className="mx-1.5 h-7 w-px bg-interaction/[0.08]" />
 
           {/* 6. 新建表 (New Table Designer) */}
           <button
@@ -553,7 +557,7 @@ export default function App() {
             className="apple-toolbar-btn"
             title="打开表结构设计器创建新表"
           >
-            <FilePlus2 className="h-5 w-5 text-[#ffd60a]" strokeWidth={1.8} />
+            <FilePlus2 className="h-5 w-5 text-icon-yellow" strokeWidth={1.8} />
             <span className="text-[12.5px] font-medium">新建表</span>
           </button>
 
@@ -570,7 +574,7 @@ export default function App() {
             className="apple-toolbar-btn"
             title="打开数据导入向导"
           >
-            <Upload className="h-5 w-5 text-[#5e5ce6]" strokeWidth={1.8} />
+            <Upload className="h-5 w-5 text-icon-purple" strokeWidth={1.8} />
             <span className="text-[12.5px] font-medium">导入</span>
           </button>
 
@@ -587,13 +591,14 @@ export default function App() {
             className="apple-toolbar-btn"
             title="导出表数据或查询结果"
           >
-            <Download className="h-5 w-5 text-[#30d158]" strokeWidth={1.8} />
+            <Download className="h-5 w-5 text-icon-green" strokeWidth={1.8} />
             <span className="text-[12.5px] font-medium">导出</span>
           </button>
         </div>
 
         {/* Right Side Controls: Info Pane Toggle + User */}
         <div className="flex items-center gap-2">
+          <ThemeSwitcher />
           {isDesktop && (
             <button type="button" aria-label="新终端窗口" title="新终端窗口（Ctrl+Shift+N）"
               onClick={() => void openTerminalWindow()} className="apple-btn-secondary">
@@ -613,8 +618,8 @@ export default function App() {
           )}
 
           {authEnabled && (
-            <div className="flex items-center gap-2 border-l border-white/[0.08] pl-2.5 text-xs text-[#9e9ea9]">
-              <span className="hidden font-medium text-[#e4e4e9] md:inline">{currentUser}</span>
+            <div className="flex items-center gap-2 border-l border-interaction/[0.08] pl-2.5 text-xs text-content-muted">
+              <span className="hidden font-medium text-content-secondary md:inline">{currentUser}</span>
               <button
                 type="button"
                 onClick={() => void handleLogout()}
@@ -633,7 +638,7 @@ export default function App() {
       {/* Main Split Area */}
       <div className="flex min-h-0 flex-1">
         {standaloneTerminal ? (
-          <aside className="w-64 shrink-0 overflow-y-auto border-r border-white/[0.08] bg-[#1e1e21]">
+          <aside className="w-64 shrink-0 overflow-y-auto border-r border-interaction/[0.08] bg-surface-panel">
             {sshNavigation}
           </aside>
         ) : <SidebarTree
@@ -671,30 +676,30 @@ export default function App() {
         />}
 
         {/* Center Multi-Tab Workspace */}
-        <main className="flex min-w-0 flex-1 flex-col bg-[#161618]">
+        <main className="flex min-w-0 flex-1 flex-col bg-surface-base">
           {/* macOS Safari/Xcode Style Tab Bar (Only shown when at least 1 tab is open) */}
           {hasAnyOpenTab && (
-            <div className="flex items-center gap-1.5 overflow-x-auto border-b border-white/[0.08] bg-[#1e1e21] px-3 py-2">
+            <div className="flex items-center gap-1.5 overflow-x-auto border-b border-interaction/[0.08] bg-surface-panel px-3 py-2">
               {objectsTabOpen && (
                 <div
                   onClick={() => setActiveTabId(OBJECTS_TAB_ID)}
                   className={`flex cursor-pointer items-center gap-2 rounded-[8px] px-3.5 py-1.5 text-[13.5px] font-medium transition-all ${
                     activeTabId === OBJECTS_TAB_ID
-                      ? 'bg-white/[0.14] text-white shadow-sm'
-                      : 'text-[#9e9ea9] hover:bg-white/[0.06] hover:text-[#e4e4e9]'
+                      ? 'bg-interaction/[0.14] text-strong shadow-sm'
+                      : 'text-content-muted hover:bg-interaction/[0.06] hover:text-content-secondary'
                   }`}
                 >
-                  <Layers className="h-4 w-4 shrink-0 text-[#52a9ff]" />
+                  <Layers className="h-4 w-4 shrink-0 text-icon-blue" />
                   <span>对象总览</span>
                   {selectedContext?.database && (
-                    <span className="max-w-[120px] truncate text-xs font-normal text-[#9e9ea9]">
+                    <span className="max-w-[120px] truncate text-xs font-normal text-content-muted">
                       · {selectedContext.database}
                     </span>
                   )}
                   <button
                     type="button"
                     onClick={(e) => closeTab(OBJECTS_TAB_ID, e)}
-                    className="ml-1 rounded-full p-0.5 text-[#9e9ea9] hover:bg-white/[0.15] hover:text-white"
+                    className="ml-1 rounded-full p-0.5 text-content-muted hover:bg-interaction/[0.15] hover:text-strong"
                   >
                     <X className="h-3.5 w-3.5" />
                   </button>
@@ -708,8 +713,8 @@ export default function App() {
                     key={tab.id}
                     className={`flex max-w-[260px] shrink-0 items-center gap-1 rounded-[8px] pl-3.5 pr-2 py-1.5 text-[13.5px] font-medium transition-all ${
                       isActive
-                        ? 'bg-white/[0.14] text-white shadow-sm'
-                        : 'text-[#9e9ea9] hover:bg-white/[0.06] hover:text-[#e4e4e9]'
+                        ? 'bg-interaction/[0.14] text-strong shadow-sm'
+                        : 'text-content-muted hover:bg-interaction/[0.06] hover:text-content-secondary'
                     }`}
                   >
                     <button
@@ -719,17 +724,17 @@ export default function App() {
                       className="flex min-w-0 items-center gap-2"
                       title={tab.title}
                     >
-                      {tab.kind === 'data' && <Table2 className="h-4 w-4 shrink-0 text-[#64d2ff]" />}
-                      {tab.kind === 'query' && <Terminal className="h-4 w-4 shrink-0 text-[#30d158]" />}
-                      {tab.kind === 'design' && <Wrench className="h-4 w-4 shrink-0 text-[#ff9f0a]" />}
-                      {tab.kind === 'terminal' && <Terminal className="h-4 w-4 shrink-0 text-[#a4a3ff]" />}
+                      {tab.kind === 'data' && <Table2 className="h-4 w-4 shrink-0 text-icon-cyan" />}
+                      {tab.kind === 'query' && <Terminal className="h-4 w-4 shrink-0 text-icon-green" />}
+                      {tab.kind === 'design' && <Wrench className="h-4 w-4 shrink-0 text-icon-orange" />}
+                      {tab.kind === 'terminal' && <Terminal className="h-4 w-4 shrink-0 text-icon-lavender" />}
                       <span className="truncate">{tab.title}</span>
                     </button>
                     <button
                       type="button"
                       onClick={(e) => closeTab(tab.id, e)}
                       aria-label={`关闭 ${tab.title}`}
-                      className="ml-1 rounded-full p-0.5 text-[#9e9ea9] hover:bg-white/[0.15] hover:text-white"
+                      className="ml-1 rounded-full p-0.5 text-content-muted hover:bg-interaction/[0.15] hover:text-strong"
                     >
                       <X className="h-3.5 w-3.5" />
                     </button>
@@ -751,10 +756,10 @@ export default function App() {
               <div className="flex h-full flex-col items-center justify-center gap-6 p-8 text-center">
                 <BrandLogo className="h-20 w-20 drop-shadow-xl" />
                 <div className="space-y-2">
-                  <h2 className="text-[18px] font-semibold tracking-tight text-white">
+                  <h2 className="text-[18px] font-semibold tracking-tight text-strong">
                     {connections.length > 0 ? '从左侧导航树选择数据表开始操作' : '欢迎使用 紫东直连'}
                   </h2>
-                  <p className="max-w-lg text-[14px] leading-relaxed text-[#9e9ea9]">
+                  <p className="max-w-lg text-[14px] leading-relaxed text-content-muted">
                     {connections.length > 0
                       ? '在左侧展开连接与数据库后，点击任意表即可直接打开数据视图；也可随时新建 SQL 查询或设计新表。'
                       : '支持 MySQL、PostgreSQL、SQLite、SQL Server、Oracle 与达梦 DM8，内置 SSH 隧道与可视化表结构设计器。'}
@@ -937,42 +942,42 @@ export default function App() {
       </div>
 
       {/* Bottom macOS Status Bar */}
-      <footer className="flex h-8 shrink-0 items-center justify-between border-t border-white/[0.08] bg-[#1e1e21] px-4 text-[12.5px] text-[#9e9ea9]">
+      <footer className="flex h-8 shrink-0 items-center justify-between border-t border-interaction/[0.08] bg-surface-panel px-4 text-[12.5px] text-content-muted">
         <div className="flex items-center gap-2.5 truncate">
           {activeTerminal ? (
             <span className="inline-flex min-w-0 items-center gap-2">
-              <Terminal className="h-3.5 w-3.5 shrink-0 text-[#a4a3ff]" />
+              <Terminal className="h-3.5 w-3.5 shrink-0 text-icon-lavender" />
               <span className="truncate">{activeTerminal.title}</span>
             </span>
           ) : selectedContext?.connection ? (
             <>
-              <span className="flex items-center gap-1.5 font-medium text-[#e4e4e9]">
-                <span className="h-2 w-2 rounded-full bg-[#30d158]" />
+              <span className="flex items-center gap-1.5 font-medium text-content-secondary">
+                <span className="h-2 w-2 rounded-full bg-icon-green" />
                 <span>{selectedContext.connection.name}</span>
-                <span className="text-[#767682]">({selectedContext.connection.engine.toUpperCase()})</span>
+                <span className="text-content-subtle">({selectedContext.connection.engine.toUpperCase()})</span>
               </span>
               {selectedContext.database && (
                 <>
-                  <span className="text-white/[0.15]">/</span>
+                  <span className="text-interaction/[0.15]">/</span>
                   <span>{selectedContext.database}</span>
                 </>
               )}
               {selectedContext.schema && (
                 <>
-                  <span className="text-white/[0.15]">/</span>
+                  <span className="text-interaction/[0.15]">/</span>
                   <span>{selectedContext.schema}</span>
                 </>
               )}
               {selectedObject && (
                 <>
-                  <span className="text-white/[0.15]">/</span>
-                  <span className="font-mono text-[#52a9ff]">{selectedObject.name}</span>
+                  <span className="text-interaction/[0.15]">/</span>
+                  <span className="font-mono text-icon-blue">{selectedObject.name}</span>
                 </>
               )}
               {selectedContext.connection.ssh.enabled && (
                 <>
-                  <span className="text-white/[0.15]">·</span>
-                  <span className="inline-flex items-center gap-1 text-[#ff9f0a]">
+                  <span className="text-interaction/[0.15]">·</span>
+                  <span className="inline-flex items-center gap-1 text-icon-orange">
                     <KeyRound className="h-3 w-3" />
                     SSH ({selectedContext.connection.ssh.host}:{selectedContext.connection.ssh.port})
                   </span>
@@ -984,7 +989,7 @@ export default function App() {
           )}
         </div>
         {!activeTerminal && (
-          <div className="hidden items-center gap-2 text-[#767682] sm:flex">
+          <div className="hidden items-center gap-2 text-content-subtle sm:flex">
             <span>MySQL · PostgreSQL · SQLite · SQL Server · Oracle · 达梦 DM8</span>
           </div>
         )}

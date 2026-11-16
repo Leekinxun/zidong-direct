@@ -72,12 +72,12 @@ type TreeContextMenu =
     };
 
 const ENGINE_BADGES: Record<EngineType, { label: string; cls: string }> = {
-  mysql: { label: 'MySQL', cls: 'bg-[#0a84ff]/20 text-[#64d2ff] border-[#0a84ff]/35' },
-  postgres: { label: 'PG', cls: 'bg-[#5e5ce6]/25 text-[#a4a3ff] border-[#5e5ce6]/40' },
-  sqlite: { label: 'SQLite', cls: 'bg-[#30d158]/20 text-[#63e682] border-[#30d158]/35' },
-  sqlserver: { label: 'MSSQL', cls: 'bg-[#ff9f0a]/20 text-[#ffb340] border-[#ff9f0a]/35' },
-  oracle: { label: 'Oracle', cls: 'bg-[#ff453a]/20 text-[#ff6961] border-[#ff453a]/35' },
-  dameng: { label: '达梦', cls: 'bg-[#5ac8fa]/20 text-[#70d7ff] border-[#5ac8fa]/35' },
+  mysql: { label: 'MySQL', cls: 'bg-accent/20 text-icon-cyan border-accent/35' },
+  postgres: { label: 'PG', cls: 'bg-icon-purple/25 text-icon-lavender border-icon-purple/40' },
+  sqlite: { label: 'SQLite', cls: 'bg-icon-green/20 text-icon-mint border-icon-green/35' },
+  sqlserver: { label: 'MSSQL', cls: 'bg-icon-orange/20 text-icon-amber border-icon-orange/35' },
+  oracle: { label: 'Oracle', cls: 'bg-danger/20 text-icon-red border-danger/35' },
+  dameng: { label: '达梦', cls: 'bg-icon-teal/20 text-icon-aqua border-icon-teal/35' },
 };
 
 export const SidebarTree: React.FC<Props> = ({
@@ -317,7 +317,7 @@ export const SidebarTree: React.FC<Props> = ({
       <div className="mt-1 space-y-1 pl-3.5">
         {/* Tables Category Node */}
         <div>
-          <div className="group flex items-center justify-between rounded-[8px] px-2 py-1.5 hover:bg-white/[0.06]">
+          <div className="group flex items-center justify-between rounded-[8px] px-2 py-1.5 hover:bg-interaction/[0.06]">
             <button
               type="button"
               onClick={() => {
@@ -327,22 +327,22 @@ export const SidebarTree: React.FC<Props> = ({
               onDoubleClick={() =>
                 onOpenObjectsOverview?.('tables', { connection: conn, database: dbName, schema: schemaName })
               }
-              className="flex min-w-0 flex-1 items-center gap-2 text-left text-[13px] text-[#d6d6de]"
+              className="flex min-w-0 flex-1 items-center gap-2 text-left text-[13px] text-content-detail"
               title="点击展开/收起表目录，双击在主界面打开表总览"
             >
               {isTablesOpen ? (
-                <ChevronDown className="h-3.5 w-3.5 shrink-0 text-[#9e9ea9]" />
+                <ChevronDown className="h-3.5 w-3.5 shrink-0 text-content-muted" />
               ) : (
-                <ChevronRight className="h-3.5 w-3.5 shrink-0 text-[#9e9ea9]" />
+                <ChevronRight className="h-3.5 w-3.5 shrink-0 text-content-muted" />
               )}
-              <Table2 className="h-4 w-4 shrink-0 text-[#64d2ff]" />
+              <Table2 className="h-4 w-4 shrink-0 text-icon-cyan" />
               <span className="font-medium">表</span>
-              <span className="text-[11.5px] text-[#8e8e98]">({tables.length})</span>
+              <span className="text-[11.5px] text-content-hint">({tables.length})</span>
             </button>
             <button
               type="button"
               onClick={() => onDesignTable(conn, dbName, effectiveSch, '', 'create')}
-              className="hidden rounded p-1 text-[#9e9ea9] hover:bg-white/[0.1] hover:text-white group-hover:block"
+              className="hidden rounded p-1 text-content-muted hover:bg-interaction/[0.1] hover:text-strong group-hover:block"
               title="新建表"
             >
               <Plus className="h-3.5 w-3.5" />
@@ -352,7 +352,7 @@ export const SidebarTree: React.FC<Props> = ({
           {isTablesOpen && (
             <div className="mt-1 space-y-1 pl-3.5">
               {tables.length === 0 ? (
-                <div className="py-1.5 pl-4 text-xs text-[#767682]">（无表）</div>
+                <div className="py-1.5 pl-4 text-xs text-content-subtle">（无表）</div>
               ) : (
                 tables.map((obj) => {
                   const isObjSelected =
@@ -383,15 +383,15 @@ export const SidebarTree: React.FC<Props> = ({
                       }}
                       className={`group flex cursor-pointer items-center justify-between rounded-[8px] py-1.5 pl-3 pr-2 transition-colors ${
                         isObjSelected
-                          ? 'bg-[#0a84ff] font-medium text-white shadow-sm'
-                          : 'text-[#e8e8ee] hover:bg-white/[0.07]'
+                          ? 'bg-accent font-medium text-on-accent shadow-sm'
+                          : 'text-content-row hover:bg-interaction/[0.07]'
                       }`}
                       title={`点击打开 ${obj.name} 数据表，右键更多操作`}
                     >
                       <div className="flex min-w-0 flex-1 items-center gap-2">
                         <Table2
                           className={`h-4 w-4 shrink-0 ${
-                            isObjSelected ? 'text-white' : 'text-[#64d2ff]'
+                            isObjSelected ? 'text-on-accent' : 'text-icon-cyan'
                           }`}
                         />
                         <span className="truncate font-mono text-[13.5px] leading-snug">{obj.name}</span>
@@ -402,8 +402,8 @@ export const SidebarTree: React.FC<Props> = ({
                           onClick={() => onDesignTable(conn, dbName, obj.schema || effectiveSch, obj.name, 'alter')}
                           className={`rounded p-1 ${
                             isObjSelected
-                              ? 'text-white/80 hover:bg-white/20 hover:text-white'
-                              : 'text-[#9e9ea9] hover:bg-white/[0.12] hover:text-white'
+                              ? 'text-on-accent/80 hover:bg-white/20 hover:text-on-accent'
+                              : 'text-content-muted hover:bg-interaction/[0.12] hover:text-strong'
                           }`}
                           title="设计表结构"
                         >
@@ -421,23 +421,23 @@ export const SidebarTree: React.FC<Props> = ({
         {/* Views Category Node */}
         {views.length > 0 && (
           <div>
-            <div className="group flex items-center justify-between rounded-[8px] px-2 py-1.5 hover:bg-white/[0.06]">
+            <div className="group flex items-center justify-between rounded-[8px] px-2 py-1.5 hover:bg-interaction/[0.06]">
               <button
                 type="button"
                 onClick={() => {
                   onSelectContext({ connection: conn, database: dbName, schema: schemaName });
                   toggleGroup(viewsGroupKey);
                 }}
-                className="flex min-w-0 flex-1 items-center gap-2 text-left text-[13px] text-[#d6d6de]"
+                className="flex min-w-0 flex-1 items-center gap-2 text-left text-[13px] text-content-detail"
               >
                 {isViewsOpen ? (
-                  <ChevronDown className="h-3.5 w-3.5 shrink-0 text-[#9e9ea9]" />
+                  <ChevronDown className="h-3.5 w-3.5 shrink-0 text-content-muted" />
                 ) : (
-                  <ChevronRight className="h-3.5 w-3.5 shrink-0 text-[#9e9ea9]" />
+                  <ChevronRight className="h-3.5 w-3.5 shrink-0 text-content-muted" />
                 )}
-                <Eye className="h-4 w-4 shrink-0 text-[#5ac8fa]" />
+                <Eye className="h-4 w-4 shrink-0 text-icon-teal" />
                 <span className="font-medium">视图</span>
-                <span className="text-[11.5px] text-[#8e8e98]">({views.length})</span>
+                <span className="text-[11.5px] text-content-hint">({views.length})</span>
               </button>
             </div>
 
@@ -472,14 +472,14 @@ export const SidebarTree: React.FC<Props> = ({
                       }}
                       className={`group flex cursor-pointer items-center justify-between rounded-[8px] py-1.5 pl-3 pr-2 transition-colors ${
                         isObjSelected
-                          ? 'bg-[#0a84ff] font-medium text-white shadow-sm'
-                          : 'text-[#e8e8ee] hover:bg-white/[0.07]'
+                          ? 'bg-accent font-medium text-on-accent shadow-sm'
+                          : 'text-content-row hover:bg-interaction/[0.07]'
                       }`}
                     >
                       <div className="flex min-w-0 flex-1 items-center gap-2">
                         <Eye
                           className={`h-4 w-4 shrink-0 ${
-                            isObjSelected ? 'text-white' : 'text-[#5ac8fa]'
+                            isObjSelected ? 'text-on-accent' : 'text-icon-teal'
                           }`}
                         />
                         <span className="truncate font-mono text-[13.5px] leading-snug">{obj.name}</span>
@@ -496,7 +496,7 @@ export const SidebarTree: React.FC<Props> = ({
   };
 
   const sshNavigation = sshSection && (
-    <div className={`max-h-[45%] shrink-0 overflow-y-auto border-white/[0.06] ${sshFirst ? 'border-b' : 'border-t'}`}>
+    <div className={`max-h-[45%] shrink-0 overflow-y-auto border-interaction/[0.06] ${sshFirst ? 'border-b' : 'border-t'}`}>
       {sshSection}
     </div>
   );
@@ -504,27 +504,27 @@ export const SidebarTree: React.FC<Props> = ({
   return (
     <aside
       style={{ width: `${sidebarWidth}px` }}
-      className="relative flex h-full shrink-0 flex-col border-r border-white/[0.08] bg-[#1e1e21] select-none"
+      className="relative flex h-full shrink-0 flex-col border-r border-interaction/[0.08] bg-surface-panel select-none"
     >
       {sshFirst && sshNavigation}
       {/* macOS Sidebar Header */}
-      <div className="flex items-center justify-between border-b border-white/[0.06] px-3.5 py-2.5">
-        <span className="text-[12.5px] font-semibold tracking-wide text-[#b4b4be]">数据库连接</span>
+      <div className="flex items-center justify-between border-b border-interaction/[0.06] px-3.5 py-2.5">
+        <span className="text-[12.5px] font-semibold tracking-wide text-content-caption">数据库连接</span>
         <button
           type="button"
           onClick={() => onNewConnection()}
           className="apple-btn-secondary px-2.5 py-1 text-[12px]"
           title="新建数据库连接"
         >
-          <Plus className="h-3.5 w-3.5 text-[#52a9ff]" />
+          <Plus className="h-3.5 w-3.5 text-icon-blue" />
           新建
         </button>
       </div>
 
       {treeError && (
-        <div className="mx-2 mt-2 flex items-center justify-between rounded-[7px] border border-[#ff453a]/30 bg-[#ff453a]/15 px-2.5 py-1.5 text-xs text-[#ff6961]">
+        <div className="mx-2 mt-2 flex items-center justify-between rounded-[7px] border border-danger/30 bg-danger/15 px-2.5 py-1.5 text-xs text-icon-red">
           <span className="truncate">{treeError}</span>
-          <button type="button" onClick={() => setTreeError('')} className="ml-1 text-[#ff6961] hover:text-white">
+          <button type="button" onClick={() => setTreeError('')} className="ml-1 text-icon-red hover:text-strong">
             <X className="h-3 w-3" />
           </button>
         </div>
@@ -533,7 +533,7 @@ export const SidebarTree: React.FC<Props> = ({
       {/* Tree Content */}
       <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto p-2">
         {connections.length === 0 ? (
-          <div className="p-5 text-center text-xs text-[#767682]">
+          <div className="p-5 text-center text-xs text-content-subtle">
             暂无数据库连接，请点击右上角「新建」
           </div>
         ) : (
@@ -561,23 +561,23 @@ export const SidebarTree: React.FC<Props> = ({
                   }}
                   className={`group flex cursor-pointer items-center justify-between rounded-[8px] px-2.5 py-2 transition-colors ${
                     isConnSelected
-                      ? 'bg-white/[0.11] text-white'
-                      : 'hover:bg-white/[0.06]'
+                      ? 'bg-interaction/[0.11] text-strong'
+                      : 'hover:bg-interaction/[0.06]'
                   }`}
                 >
                   <div className="flex min-w-0 flex-1 items-center gap-2">
                     {isConnLoading ? (
-                      <Loader2 className="h-4 w-4 shrink-0 animate-spin text-[#52a9ff]" />
+                      <Loader2 className="h-4 w-4 shrink-0 animate-spin text-icon-blue" />
                     ) : isConnOpen ? (
-                      <ChevronDown className="h-4 w-4 shrink-0 text-[#9e9ea9]" />
+                      <ChevronDown className="h-4 w-4 shrink-0 text-content-muted" />
                     ) : (
-                      <ChevronRight className="h-4 w-4 shrink-0 text-[#9e9ea9]" />
+                      <ChevronRight className="h-4 w-4 shrink-0 text-content-muted" />
                     )}
 
                     {/* Connection active dot */}
                     <span
                       className={`h-2.5 w-2.5 shrink-0 rounded-full transition-colors ${
-                        isConnOpen ? 'bg-[#30d158] shadow-[0_0_6px_rgba(48,209,88,0.8)]' : 'bg-[#54545e]'
+                        isConnOpen ? 'bg-icon-green shadow-[0_0_6px_rgba(48,209,88,0.8)]' : 'bg-content-inactive'
                       }`}
                     />
 
@@ -586,10 +586,10 @@ export const SidebarTree: React.FC<Props> = ({
                     </span>
                     {conn.ssh.enabled && (
                       <span title="已启用 SSH 隧道">
-                        <KeyRound className="h-3.5 w-3.5 shrink-0 text-[#ff9f0a]" />
+                        <KeyRound className="h-3.5 w-3.5 shrink-0 text-icon-orange" />
                       </span>
                     )}
-                    <span className="truncate text-[14px] font-semibold text-[#f2f2f7]">{conn.name}</span>
+                    <span className="truncate text-[14px] font-semibold text-content">{conn.name}</span>
                   </div>
 
                   {conn.ssh.enabled && onOpenSSHTerminal && (
@@ -601,7 +601,7 @@ export const SidebarTree: React.FC<Props> = ({
                       }}
                       aria-label="打开 SSH 终端"
                       title="打开 SSH 终端"
-                      className="ml-1 shrink-0 rounded p-1 text-[#a4a3ff] hover:bg-white/[0.1] hover:text-white"
+                      className="ml-1 shrink-0 rounded p-1 text-icon-lavender hover:bg-interaction/[0.1] hover:text-strong"
                     >
                       <TerminalSquare aria-hidden="true" className="h-3.5 w-3.5" />
                     </button>
@@ -610,7 +610,7 @@ export const SidebarTree: React.FC<Props> = ({
                     <button
                       type="button"
                       onClick={() => onOpenQuery(conn, conn.database || dbs[0] || '', '')}
-                      className="rounded p-1 text-[#30d158] hover:bg-white/[0.1]"
+                      className="rounded p-1 text-icon-green hover:bg-interaction/[0.1]"
                       title="新建 SQL 查询"
                     >
                       <Terminal className="h-3.5 w-3.5" />
@@ -618,7 +618,7 @@ export const SidebarTree: React.FC<Props> = ({
                     <button
                       type="button"
                       onClick={() => void toggleConn(conn, true)}
-                      className="rounded p-1 text-[#9e9ea9] hover:bg-white/[0.1] hover:text-white"
+                      className="rounded p-1 text-content-muted hover:bg-interaction/[0.1] hover:text-strong"
                       title="刷新连接"
                     >
                       <RefreshCw className="h-3.5 w-3.5" />
@@ -626,7 +626,7 @@ export const SidebarTree: React.FC<Props> = ({
                     <button
                       type="button"
                       onClick={() => onEditConnection(conn)}
-                      className="rounded p-1 text-[#9e9ea9] hover:bg-white/[0.1] hover:text-white"
+                      className="rounded p-1 text-content-muted hover:bg-interaction/[0.1] hover:text-strong"
                       title="编辑连接"
                     >
                       <Edit3 className="h-3.5 w-3.5" />
@@ -666,21 +666,21 @@ export const SidebarTree: React.FC<Props> = ({
                             }}
                             className={`group flex cursor-pointer items-center justify-between rounded-[8px] px-2.5 py-2 transition-colors ${
                               isDbSelected
-                                ? 'bg-white/[0.1] text-white'
-                                : 'text-[#e8e8ee] hover:bg-white/[0.06]'
+                                ? 'bg-interaction/[0.1] text-strong'
+                                : 'text-content-row hover:bg-interaction/[0.06]'
                             }`}
                           >
                             <div className="flex min-w-0 flex-1 items-center gap-2 text-[13.5px]">
                               {isDbLoading ? (
-                                <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-[#52a9ff]" />
+                                <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-icon-blue" />
                               ) : isDbOpen ? (
-                                <ChevronDown className="h-3.5 w-3.5 shrink-0 text-[#9e9ea9]" />
+                                <ChevronDown className="h-3.5 w-3.5 shrink-0 text-content-muted" />
                               ) : (
-                                <ChevronRight className="h-3.5 w-3.5 shrink-0 text-[#9e9ea9]" />
+                                <ChevronRight className="h-3.5 w-3.5 shrink-0 text-content-muted" />
                               )}
                               <Database
                                 className={`h-4 w-4 shrink-0 ${
-                                  isDbOpen ? 'text-[#ff9f0a]' : 'text-[#9e9ea9]'
+                                  isDbOpen ? 'text-icon-orange' : 'text-content-muted'
                                 }`}
                               />
                               <span className="truncate font-medium">{dbName}</span>
@@ -690,7 +690,7 @@ export const SidebarTree: React.FC<Props> = ({
                               <button
                                 type="button"
                                 onClick={() => onOpenQuery(conn, dbName, '')}
-                                className="rounded p-1 text-[#30d158] hover:bg-white/[0.1]"
+                                className="rounded p-1 text-icon-green hover:bg-interaction/[0.1]"
                                 title="新建查询"
                               >
                                 <Terminal className="h-3.5 w-3.5" />
@@ -698,7 +698,7 @@ export const SidebarTree: React.FC<Props> = ({
                               <button
                                 type="button"
                                 onClick={() => void toggleDatabase(conn, dbName, true)}
-                                className="rounded p-1 text-[#9e9ea9] hover:bg-white/[0.1] hover:text-white"
+                                className="rounded p-1 text-content-muted hover:bg-interaction/[0.1] hover:text-strong"
                                 title="刷新库"
                               >
                                 <RefreshCw className="h-3.5 w-3.5" />
@@ -743,19 +743,19 @@ export const SidebarTree: React.FC<Props> = ({
                                           }}
                                           className={`group flex cursor-pointer items-center justify-between rounded-[8px] px-2.5 py-1.5 transition-colors ${
                                             isSchSelected
-                                              ? 'bg-white/[0.1] text-white'
-                                              : 'text-[#d6d6de] hover:bg-white/[0.06]'
+                                              ? 'bg-interaction/[0.1] text-strong'
+                                              : 'text-content-detail hover:bg-interaction/[0.06]'
                                           }`}
                                         >
                                           <div className="flex min-w-0 flex-1 items-center gap-2 text-[13px]">
                                             {isSchLoading ? (
-                                              <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-[#52a9ff]" />
+                                              <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-icon-blue" />
                                             ) : isSchOpen ? (
-                                              <ChevronDown className="h-3.5 w-3.5 shrink-0 text-[#9e9ea9]" />
+                                              <ChevronDown className="h-3.5 w-3.5 shrink-0 text-content-muted" />
                                             ) : (
-                                              <ChevronRight className="h-3.5 w-3.5 shrink-0 text-[#9e9ea9]" />
+                                              <ChevronRight className="h-3.5 w-3.5 shrink-0 text-content-muted" />
                                             )}
-                                            <Layers className="h-4 w-4 shrink-0 text-[#ffd60a]" />
+                                            <Layers className="h-4 w-4 shrink-0 text-icon-yellow" />
                                             <span className="truncate font-medium">{schemaName}</span>
                                           </div>
                                           <div
@@ -765,7 +765,7 @@ export const SidebarTree: React.FC<Props> = ({
                                             <button
                                               type="button"
                                               onClick={() => onDesignTable(conn, dbName, schemaName, '', 'create')}
-                                              className="rounded p-0.5 text-[#9e9ea9] hover:bg-white/[0.1] hover:text-white"
+                                              className="rounded p-0.5 text-content-muted hover:bg-interaction/[0.1] hover:text-strong"
                                               title="新建表"
                                             >
                                               <FilePlus2 className="h-3 w-3" />
@@ -773,7 +773,7 @@ export const SidebarTree: React.FC<Props> = ({
                                             <button
                                               type="button"
                                               onClick={() => onOpenQuery(conn, dbName, schemaName)}
-                                              className="rounded p-0.5 text-[#30d158] hover:bg-white/[0.1]"
+                                              className="rounded p-0.5 text-icon-green hover:bg-interaction/[0.1]"
                                               title="新建查询"
                                             >
                                               <Terminal className="h-3 w-3" />
@@ -781,7 +781,7 @@ export const SidebarTree: React.FC<Props> = ({
                                             <button
                                               type="button"
                                               onClick={() => void toggleSchema(conn, dbName, schemaName, true)}
-                                              className="rounded p-0.5 text-[#9e9ea9] hover:bg-white/[0.1] hover:text-white"
+                                              className="rounded p-0.5 text-content-muted hover:bg-interaction/[0.1] hover:text-strong"
                                               title="刷新模式"
                                             >
                                               <RefreshCw className="h-3 w-3" />
@@ -806,7 +806,7 @@ export const SidebarTree: React.FC<Props> = ({
                       );
                     })}
                     {dbs.length === 0 && !isConnLoading && (
-                      <div className="flex items-center gap-1 py-1 pl-4 text-xs text-[#767682]">
+                      <div className="flex items-center gap-1 py-1 pl-4 text-xs text-content-subtle">
                         <Folder className="h-3 w-3" /> 无可见数据库
                       </div>
                     )}
@@ -821,9 +821,9 @@ export const SidebarTree: React.FC<Props> = ({
       {!sshFirst && sshNavigation}
 
       {/* macOS Bottom Sidebar Filter Box */}
-      <div className="border-t border-white/[0.06] bg-[#1a1a1d] p-2">
+      <div className="border-t border-interaction/[0.06] bg-surface-inset p-2">
         <div className="relative flex items-center">
-          <Search className="pointer-events-none absolute left-2.5 h-3.5 w-3.5 text-[#767682]" />
+          <Search className="pointer-events-none absolute left-2.5 h-3.5 w-3.5 text-content-subtle" />
           <input
             type="text"
             placeholder="搜索表或视图..."
@@ -835,7 +835,7 @@ export const SidebarTree: React.FC<Props> = ({
             <button
               type="button"
               onClick={() => setSearchFilter('')}
-              className="absolute right-2 text-[#9e9ea9] hover:text-white"
+              className="absolute right-2 text-content-muted hover:text-strong"
             >
               <X className="h-3 w-3" />
             </button>
@@ -851,11 +851,11 @@ export const SidebarTree: React.FC<Props> = ({
             left: Math.min(contextMenu.x, window.innerWidth - 210),
           }}
           onClick={(e) => e.stopPropagation()}
-          className="fixed z-50 w-52 rounded-xl border border-white/[0.12] bg-[#2a2a2e]/95 p-1 text-xs text-[#f2f2f7] shadow-2xl backdrop-blur-2xl"
+          className="fixed z-50 w-52 rounded-xl border border-interaction/[0.12] bg-surface-menu/95 p-1 text-xs text-content shadow-2xl backdrop-blur-2xl"
         >
           {contextMenu.kind === 'conn' && (
             <>
-              <div className="border-b border-white/[0.08] px-2.5 py-1 font-medium text-[#9e9ea9] truncate">
+              <div className="border-b border-interaction/[0.08] px-2.5 py-1 font-medium text-content-muted truncate">
                 {contextMenu.conn.name}
               </div>
               <button
@@ -865,9 +865,9 @@ export const SidebarTree: React.FC<Props> = ({
                   setContextMenu(null);
                   void toggleConn(c);
                 }}
-                className="flex w-full items-center gap-2 rounded-[6px] px-2.5 py-1.5 text-left hover:bg-[#0a84ff] hover:text-white"
+                className="theme-menu-item flex w-full items-center gap-2 rounded-[6px] px-2.5 py-1.5 text-left hover:bg-accent hover:text-on-accent"
               >
-                <FolderOpen className="h-3.5 w-3.5 text-[#30d158]" />
+                <FolderOpen className="h-3.5 w-3.5 text-icon-green" />
                 {expandedConns[contextMenu.conn.id] ? '收起连接' : '打开连接'}
               </button>
               <button
@@ -877,9 +877,9 @@ export const SidebarTree: React.FC<Props> = ({
                   setContextMenu(null);
                   onOpenQuery(c, c.database || databasesByConn[c.id]?.[0] || '', '');
                 }}
-                className="flex w-full items-center gap-2 rounded-[6px] px-2.5 py-1.5 text-left hover:bg-[#0a84ff] hover:text-white"
+                className="theme-menu-item flex w-full items-center gap-2 rounded-[6px] px-2.5 py-1.5 text-left hover:bg-accent hover:text-on-accent"
               >
-                <Terminal className="h-3.5 w-3.5 text-[#30d158]" />
+                <Terminal className="h-3.5 w-3.5 text-icon-green" />
                 新建 SQL 查询
               </button>
               {contextMenu.conn.ssh.enabled && onSaveSSHHost && (
@@ -895,9 +895,9 @@ export const SidebarTree: React.FC<Props> = ({
                       .catch((err) => setTreeError(err instanceof Error ? err.message : '无法另存 SSH 主机'))
                       .finally(() => setCopyingSSHHost(false));
                   }}
-                  className="flex w-full items-center gap-2 rounded-[6px] px-2.5 py-1.5 text-left hover:bg-[#0a84ff] hover:text-white disabled:opacity-50"
+                  className="theme-menu-item flex w-full items-center gap-2 rounded-[6px] px-2.5 py-1.5 text-left hover:bg-accent hover:text-on-accent disabled:opacity-50"
                 >
-                  <TerminalSquare className="h-3.5 w-3.5 text-[#a4a3ff]" />
+                  <TerminalSquare className="h-3.5 w-3.5 text-icon-lavender" />
                   另存为 SSH 主机
                 </button>
               )}
@@ -908,9 +908,9 @@ export const SidebarTree: React.FC<Props> = ({
                   setContextMenu(null);
                   onEditConnection(c);
                 }}
-                className="flex w-full items-center gap-2 rounded-[6px] px-2.5 py-1.5 text-left hover:bg-[#0a84ff] hover:text-white"
+                className="theme-menu-item flex w-full items-center gap-2 rounded-[6px] px-2.5 py-1.5 text-left hover:bg-accent hover:text-on-accent"
               >
-                <Edit3 className="h-3.5 w-3.5 text-[#52a9ff]" />
+                <Edit3 className="h-3.5 w-3.5 text-icon-blue" />
                 编辑连接属性...
               </button>
               <button
@@ -920,12 +920,12 @@ export const SidebarTree: React.FC<Props> = ({
                   setContextMenu(null);
                   void toggleConn(c, true);
                 }}
-                className="flex w-full items-center gap-2 rounded-[6px] px-2.5 py-1.5 text-left hover:bg-[#0a84ff] hover:text-white"
+                className="theme-menu-item flex w-full items-center gap-2 rounded-[6px] px-2.5 py-1.5 text-left hover:bg-accent hover:text-on-accent"
               >
-                <RefreshCw className="h-3.5 w-3.5 text-[#9e9ea9]" />
+                <RefreshCw className="h-3.5 w-3.5 text-content-muted" />
                 刷新
               </button>
-              <div className="my-1 border-t border-white/[0.08]" />
+              <div className="my-1 border-t border-interaction/[0.08]" />
               <button
                 type="button"
                 onClick={() => {
@@ -934,7 +934,7 @@ export const SidebarTree: React.FC<Props> = ({
                   setExpandedConns((p) => ({ ...p, [c.id]: false }));
                   onDisconnectConnection(c);
                 }}
-                className="flex w-full items-center gap-2 rounded-[6px] px-2.5 py-1.5 text-left text-[#ff9f0a] hover:bg-[#ff9f0a]/20"
+                className="flex w-full items-center gap-2 rounded-[6px] px-2.5 py-1.5 text-left text-icon-orange hover:bg-icon-orange/20"
               >
                 <Unplug className="h-3.5 w-3.5" />
                 关闭连接 / 断开隧道
@@ -946,7 +946,7 @@ export const SidebarTree: React.FC<Props> = ({
                   setContextMenu(null);
                   onDeleteConnection(c);
                 }}
-                className="flex w-full items-center gap-2 rounded-[6px] px-2.5 py-1.5 text-left text-[#ff6961] hover:bg-[#ff453a]/20"
+                className="flex w-full items-center gap-2 rounded-[6px] px-2.5 py-1.5 text-left text-icon-red hover:bg-danger/20"
               >
                 <Trash2 className="h-3.5 w-3.5" />
                 删除连接
@@ -956,7 +956,7 @@ export const SidebarTree: React.FC<Props> = ({
 
           {contextMenu.kind === 'db' && (
             <>
-              <div className="border-b border-white/[0.08] px-2.5 py-1 font-mono font-medium text-[#9e9ea9] truncate">
+              <div className="border-b border-interaction/[0.08] px-2.5 py-1 font-mono font-medium text-content-muted truncate">
                 {contextMenu.database}
               </div>
               {onShowDetails && (
@@ -968,9 +968,9 @@ export const SidebarTree: React.FC<Props> = ({
                     setContextMenu(null);
                     onShowDetails();
                   }}
-                  className="flex w-full items-center gap-2 rounded-[6px] px-2.5 py-1.5 text-left hover:bg-[#0a84ff] hover:text-white"
+                  className="theme-menu-item flex w-full items-center gap-2 rounded-[6px] px-2.5 py-1.5 text-left hover:bg-accent hover:text-on-accent"
                 >
-                  <Info className="h-3.5 w-3.5 text-[#64d2ff]" />
+                  <Info className="h-3.5 w-3.5 text-icon-cyan" />
                   查看数据库注释
                 </button>
               )}
@@ -981,9 +981,9 @@ export const SidebarTree: React.FC<Props> = ({
                   setContextMenu(null);
                   onOpenObjectsOverview?.('tables', { connection: conn, database: dbName, schema: '' });
                 }}
-                className="flex w-full items-center gap-2 rounded-[6px] px-2.5 py-1.5 text-left hover:bg-[#0a84ff] hover:text-white"
+                className="theme-menu-item flex w-full items-center gap-2 rounded-[6px] px-2.5 py-1.5 text-left hover:bg-accent hover:text-on-accent"
               >
-                <Table2 className="h-3.5 w-3.5 text-[#64d2ff]" />
+                <Table2 className="h-3.5 w-3.5 text-icon-cyan" />
                 在对象总览中查看所有表
               </button>
               <button
@@ -993,9 +993,9 @@ export const SidebarTree: React.FC<Props> = ({
                   setContextMenu(null);
                   onDesignTable(conn, dbName, conn.engine === 'sqlite' ? 'main' : '', '', 'create');
                 }}
-                className="flex w-full items-center gap-2 rounded-[6px] px-2.5 py-1.5 text-left hover:bg-[#0a84ff] hover:text-white"
+                className="theme-menu-item flex w-full items-center gap-2 rounded-[6px] px-2.5 py-1.5 text-left hover:bg-accent hover:text-on-accent"
               >
-                <FilePlus2 className="h-3.5 w-3.5 text-[#30d158]" />
+                <FilePlus2 className="h-3.5 w-3.5 text-icon-green" />
                 新建表...
               </button>
               <button
@@ -1005,9 +1005,9 @@ export const SidebarTree: React.FC<Props> = ({
                   setContextMenu(null);
                   onOpenQuery(conn, dbName, '');
                 }}
-                className="flex w-full items-center gap-2 rounded-[6px] px-2.5 py-1.5 text-left hover:bg-[#0a84ff] hover:text-white"
+                className="theme-menu-item flex w-full items-center gap-2 rounded-[6px] px-2.5 py-1.5 text-left hover:bg-accent hover:text-on-accent"
               >
-                <Terminal className="h-3.5 w-3.5 text-[#30d158]" />
+                <Terminal className="h-3.5 w-3.5 text-icon-green" />
                 新建查询
               </button>
               <button
@@ -1017,9 +1017,9 @@ export const SidebarTree: React.FC<Props> = ({
                   setContextMenu(null);
                   void toggleDatabase(conn, dbName, true);
                 }}
-                className="flex w-full items-center gap-2 rounded-[6px] px-2.5 py-1.5 text-left hover:bg-[#0a84ff] hover:text-white"
+                className="theme-menu-item flex w-full items-center gap-2 rounded-[6px] px-2.5 py-1.5 text-left hover:bg-accent hover:text-on-accent"
               >
-                <RefreshCw className="h-3.5 w-3.5 text-[#9e9ea9]" />
+                <RefreshCw className="h-3.5 w-3.5 text-content-muted" />
                 刷新
               </button>
             </>
@@ -1027,7 +1027,7 @@ export const SidebarTree: React.FC<Props> = ({
 
           {contextMenu.kind === 'schema' && (
             <>
-              <div className="border-b border-white/[0.08] px-2.5 py-1 font-mono font-medium text-[#9e9ea9] truncate">
+              <div className="border-b border-interaction/[0.08] px-2.5 py-1 font-mono font-medium text-content-muted truncate">
                 {contextMenu.schema}
               </div>
               <button
@@ -1037,9 +1037,9 @@ export const SidebarTree: React.FC<Props> = ({
                   setContextMenu(null);
                   onOpenObjectsOverview?.('tables', { connection: conn, database: dbName, schema: sch });
                 }}
-                className="flex w-full items-center gap-2 rounded-[6px] px-2.5 py-1.5 text-left hover:bg-[#0a84ff] hover:text-white"
+                className="theme-menu-item flex w-full items-center gap-2 rounded-[6px] px-2.5 py-1.5 text-left hover:bg-accent hover:text-on-accent"
               >
-                <Table2 className="h-3.5 w-3.5 text-[#64d2ff]" />
+                <Table2 className="h-3.5 w-3.5 text-icon-cyan" />
                 在对象总览中查看所有表
               </button>
               <button
@@ -1049,9 +1049,9 @@ export const SidebarTree: React.FC<Props> = ({
                   setContextMenu(null);
                   onDesignTable(conn, dbName, sch, '', 'create');
                 }}
-                className="flex w-full items-center gap-2 rounded-[6px] px-2.5 py-1.5 text-left hover:bg-[#0a84ff] hover:text-white"
+                className="theme-menu-item flex w-full items-center gap-2 rounded-[6px] px-2.5 py-1.5 text-left hover:bg-accent hover:text-on-accent"
               >
-                <FilePlus2 className="h-3.5 w-3.5 text-[#30d158]" />
+                <FilePlus2 className="h-3.5 w-3.5 text-icon-green" />
                 新建表...
               </button>
               <button
@@ -1061,9 +1061,9 @@ export const SidebarTree: React.FC<Props> = ({
                   setContextMenu(null);
                   onOpenQuery(conn, dbName, sch);
                 }}
-                className="flex w-full items-center gap-2 rounded-[6px] px-2.5 py-1.5 text-left hover:bg-[#0a84ff] hover:text-white"
+                className="theme-menu-item flex w-full items-center gap-2 rounded-[6px] px-2.5 py-1.5 text-left hover:bg-accent hover:text-on-accent"
               >
-                <Terminal className="h-3.5 w-3.5 text-[#30d158]" />
+                <Terminal className="h-3.5 w-3.5 text-icon-green" />
                 新建查询
               </button>
               <button
@@ -1073,9 +1073,9 @@ export const SidebarTree: React.FC<Props> = ({
                   setContextMenu(null);
                   void toggleSchema(conn, dbName, sch, true);
                 }}
-                className="flex w-full items-center gap-2 rounded-[6px] px-2.5 py-1.5 text-left hover:bg-[#0a84ff] hover:text-white"
+                className="theme-menu-item flex w-full items-center gap-2 rounded-[6px] px-2.5 py-1.5 text-left hover:bg-accent hover:text-on-accent"
               >
-                <RefreshCw className="h-3.5 w-3.5 text-[#9e9ea9]" />
+                <RefreshCw className="h-3.5 w-3.5 text-content-muted" />
                 刷新
               </button>
             </>
@@ -1083,7 +1083,7 @@ export const SidebarTree: React.FC<Props> = ({
 
           {contextMenu.kind === 'object' && (
             <>
-              <div className="border-b border-white/[0.08] px-2.5 py-1 font-mono font-medium text-[#9e9ea9] truncate">
+              <div className="border-b border-interaction/[0.08] px-2.5 py-1 font-mono font-medium text-content-muted truncate">
                 {contextMenu.object.name}
               </div>
               {onShowDetails && (
@@ -1099,9 +1099,9 @@ export const SidebarTree: React.FC<Props> = ({
                     setContextMenu(null);
                     onShowDetails();
                   }}
-                  className="flex w-full items-center gap-2 rounded-[6px] px-2.5 py-1.5 text-left hover:bg-[#0a84ff] hover:text-white"
+                  className="theme-menu-item flex w-full items-center gap-2 rounded-[6px] px-2.5 py-1.5 text-left hover:bg-accent hover:text-on-accent"
                 >
-                  <Info className="h-3.5 w-3.5 text-[#64d2ff]" />
+                  <Info className="h-3.5 w-3.5 text-icon-cyan" />
                   查看注释
                 </button>
               )}
@@ -1112,9 +1112,9 @@ export const SidebarTree: React.FC<Props> = ({
                   setContextMenu(null);
                   onOpenTableData(conn, dbName, sch, obj.name);
                 }}
-                className="flex w-full items-center gap-2 rounded-[6px] px-2.5 py-1.5 text-left hover:bg-[#0a84ff] hover:text-white"
+                className="theme-menu-item flex w-full items-center gap-2 rounded-[6px] px-2.5 py-1.5 text-left hover:bg-accent hover:text-on-accent"
               >
-                <FolderOpen className="h-3.5 w-3.5 text-[#64d2ff]" />
+                <FolderOpen className="h-3.5 w-3.5 text-icon-cyan" />
                 打开表数据
               </button>
               {contextMenu.object.type === 'TABLE' && (
@@ -1125,9 +1125,9 @@ export const SidebarTree: React.FC<Props> = ({
                     setContextMenu(null);
                     onDesignTable(conn, dbName, sch, obj.name, 'alter');
                   }}
-                  className="flex w-full items-center gap-2 rounded-[6px] px-2.5 py-1.5 text-left hover:bg-[#0a84ff] hover:text-white"
+                  className="theme-menu-item flex w-full items-center gap-2 rounded-[6px] px-2.5 py-1.5 text-left hover:bg-accent hover:text-on-accent"
                 >
-                  <Edit3 className="h-3.5 w-3.5 text-[#ff9f0a]" />
+                  <Edit3 className="h-3.5 w-3.5 text-icon-orange" />
                   设计表结构
                 </button>
               )}
@@ -1138,9 +1138,9 @@ export const SidebarTree: React.FC<Props> = ({
                   setContextMenu(null);
                   onOpenQuery(conn, dbName, sch, buildSelectSql(conn, sch, obj.name));
                 }}
-                className="flex w-full items-center gap-2 rounded-[6px] px-2.5 py-1.5 text-left hover:bg-[#0a84ff] hover:text-white"
+                className="theme-menu-item flex w-full items-center gap-2 rounded-[6px] px-2.5 py-1.5 text-left hover:bg-accent hover:text-on-accent"
               >
-                <Terminal className="h-3.5 w-3.5 text-[#30d158]" />
+                <Terminal className="h-3.5 w-3.5 text-icon-green" />
                 新建查询 (SELECT 前100行)
               </button>
               <button
@@ -1149,9 +1149,9 @@ export const SidebarTree: React.FC<Props> = ({
                   void navigator.clipboard?.writeText(contextMenu.object.name);
                   setContextMenu(null);
                 }}
-                className="flex w-full items-center gap-2 rounded-[6px] px-2.5 py-1.5 text-left hover:bg-[#0a84ff] hover:text-white"
+                className="theme-menu-item flex w-full items-center gap-2 rounded-[6px] px-2.5 py-1.5 text-left hover:bg-accent hover:text-on-accent"
               >
-                <Copy className="h-3.5 w-3.5 text-[#9e9ea9]" />
+                <Copy className="h-3.5 w-3.5 text-content-muted" />
                 复制表名
               </button>
             </>
@@ -1168,7 +1168,7 @@ export const SidebarTree: React.FC<Props> = ({
         }}
         title="左右拖动调整侧边栏宽度（双击恢复默认宽度）"
         className={`absolute -right-1 top-0 z-30 h-full w-2 cursor-col-resize transition-colors ${
-          resizing ? 'bg-[#0a84ff]/70' : 'hover:bg-[#0a84ff]/50'
+          resizing ? 'bg-accent/70' : 'hover:bg-accent/50'
         }`}
       />
     </aside>

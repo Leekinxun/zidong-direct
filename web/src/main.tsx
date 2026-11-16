@@ -3,6 +3,9 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import { isDesktop, loadDesktopPreferences } from './preferences';
 import './index.css';
+import { initializeTheme } from './theme';
+
+initializeTheme();
 
 function renderApp() {
   ReactDOM.createRoot(document.getElementById('root')!).render(

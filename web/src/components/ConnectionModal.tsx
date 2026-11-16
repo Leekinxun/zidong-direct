@@ -637,7 +637,7 @@ export const ConnectionModal: React.FC<Props> = ({ editing, initialEngine, onClo
             </div>
           )}
 
-          <div className="mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-white/[0.08] pt-4">
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-interaction/[0.08] pt-4">
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"

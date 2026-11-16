@@ -342,7 +342,7 @@ export const DataGridTab: React.FC<Props> = ({
   return (
     <div className="flex h-full flex-col bg-slate-950 select-none">
       {/* Top Navicat-Style Table View Sub-Toolbar */}
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/[0.08] bg-[#1e1e21] px-3 py-1.5">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-interaction/[0.08] bg-surface-panel px-3 py-1.5">
         <div className="flex flex-wrap items-center gap-1.5">
           <button
             type="button"
@@ -383,7 +383,7 @@ export const DataGridTab: React.FC<Props> = ({
                 onClick={discardChanges}
                 className="apple-btn-secondary"
               >
-                <X className="h-3.5 w-3.5 text-[#ff9f0a]" />
+                <X className="h-3.5 w-3.5 text-icon-orange" />
                 放弃
               </button>
             </div>
@@ -397,7 +397,7 @@ export const DataGridTab: React.FC<Props> = ({
             onClick={() => setIoModal('import')}
             className="apple-btn-secondary"
           >
-            <Upload className="h-3.5 w-3.5 text-[#5e5ce6]" />
+            <Upload className="h-3.5 w-3.5 text-icon-purple" />
             导入
           </button>
           <button
@@ -405,7 +405,7 @@ export const DataGridTab: React.FC<Props> = ({
             onClick={() => setIoModal('export')}
             className="apple-btn-secondary"
           >
-            <Download className="h-3.5 w-3.5 text-[#30d158]" />
+            <Download className="h-3.5 w-3.5 text-icon-green" />
             导出
           </button>
           <button
@@ -414,7 +414,7 @@ export const DataGridTab: React.FC<Props> = ({
             className="apple-btn-secondary"
             title="在 SQL 查询窗口中打开当前表查询"
           >
-            <Terminal className="h-3.5 w-3.5 text-[#30d158]" />
+            <Terminal className="h-3.5 w-3.5 text-icon-green" />
             新建查询
           </button>
           <button
@@ -423,7 +423,7 @@ export const DataGridTab: React.FC<Props> = ({
             className="apple-btn-secondary"
             title="切换到表结构设计器"
           >
-            <Edit3 className="h-3.5 w-3.5 text-[#ff9f0a]" />
+            <Edit3 className="h-3.5 w-3.5 text-icon-orange" />
             设计表
           </button>
         </div>
@@ -515,7 +515,7 @@ export const DataGridTab: React.FC<Props> = ({
             <button
               type="button"
               onClick={handleApplyFilters}
-              className="rounded bg-indigo-600 px-3 py-1 text-xs font-medium text-white hover:bg-indigo-500"
+              className="rounded bg-indigo-600 px-3 py-1 text-xs font-medium text-on-accent hover:bg-indigo-500"
             >
               应用筛选
             </button>
@@ -536,7 +536,7 @@ export const DataGridTab: React.FC<Props> = ({
       {statusMsg && (
         <div className="flex items-center justify-between border-b border-emerald-800 bg-emerald-950/60 px-3 py-1.5 text-xs text-emerald-200">
           <span>{statusMsg}</span>
-          <button type="button" onClick={() => setStatusMsg('')} className="text-emerald-300 hover:text-white">
+          <button type="button" onClick={() => setStatusMsg('')} className="text-emerald-300 hover:text-strong">
             <X className="h-3.5 w-3.5" />
           </button>
         </div>
@@ -694,7 +694,7 @@ export const DataGridTab: React.FC<Props> = ({
                             hasEdit
                               ? 'bg-amber-950/60 text-amber-200'
                               : isCellSelected
-                              ? 'outline outline-1 outline-indigo-500/80 bg-indigo-950/60 text-white'
+                              ? 'outline outline-1 outline-indigo-500/80 bg-indigo-950/60 text-strong'
                               : 'text-slate-200'
                           }`}
                           title={displayVal === null ? '(NULL) - 双击编辑' : `${String(displayVal)} (双击编辑)`}
@@ -772,7 +772,7 @@ export const DataGridTab: React.FC<Props> = ({
             onClick={() => void handleCommitMutations()}
             className={`flex h-7 items-center gap-1 rounded border px-2.5 ${
               pendingCount > 0
-                ? 'border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-500'
+                ? 'border-emerald-600 bg-emerald-600 text-on-accent hover:bg-emerald-500'
                 : 'border-slate-700 bg-slate-800 text-slate-400 opacity-40'
             }`}
             title="应用修改 (✓)"
@@ -821,7 +821,7 @@ export const DataGridTab: React.FC<Props> = ({
           </button>
 
           <span className="px-2 text-[13px] text-slate-300">
-            第 <strong className="font-mono text-white">{page}</strong>
+            第 <strong className="font-mono text-strong">{page}</strong>
             {totalPages ? ` / ${totalPages}` : ''} 页
           </span>
 
