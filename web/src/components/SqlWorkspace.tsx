@@ -3,7 +3,8 @@ import { basicSetup } from 'codemirror';
 import { Compartment, EditorState } from '@codemirror/state';
 import { EditorView, keymap } from '@codemirror/view';
 import { MSSQL, MySQL, PostgreSQL, SQLite, StandardSQL, sql } from '@codemirror/lang-sql';
-import { oneDark } from '@codemirror/theme-one-dark';
+import { useTheme } from '../theme';
+import { sqlEditorTheme } from '../widgetThemes';
 import { Clock, Download, Eraser, Loader2, Play, Sparkles, Terminal } from 'lucide-react';
 import { api, ApiError } from '../api/client';
 import { saveSqlHistoryItem, useSqlHistory } from '../preferences';
@@ -75,6 +76,8 @@ export const SqlWorkspace: React.FC<Props> = ({
   const resultsRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
   const sqlCompartmentRef = useRef<Compartment>(new Compartment());
+  const themeCompartmentRef = useRef<Compartment>(new Compartment());
+  const theme = useTheme();
   const runRef = useRef<(selectedOnly: boolean) => void>(() => {});
   const [fontSize, adjustFontSize] = useDatabaseFontSize();
   useWheelFontZoom(editorHostRef, adjustFontSize);
@@ -221,7 +224,7 @@ export const SqlWorkspace: React.FC<Props> = ({
       doc: initialSql || defaultTemplateForEngine(activeEngine),
       extensions: [
         basicSetup,
-        oneDark,
+        themeCompartmentRef.current.of(sqlEditorTheme(theme)),
         sqlCompartment.of(
           sql({
             dialect: getSqlDialect(activeEngine),
@@ -263,6 +266,12 @@ export const SqlWorkspace: React.FC<Props> = ({
     view.dom.style.fontSize = `${fontSize}px`;
     view.requestMeasure();
   }, [fontSize]);
+
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    view.dispatch({ effects: themeCompartmentRef.current.reconfigure(sqlEditorTheme(theme)) });
+  }, [theme]);
 
   // Reconfigure SQL dialect & autocomplete schema without wiping typed text
   useEffect(() => {
@@ -321,7 +330,7 @@ export const SqlWorkspace: React.FC<Props> = ({
   return (
     <div className="relative flex h-full flex-col">
       {/* Toolbar */}
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/[0.08] bg-[#1e1e21] px-3 py-1.5">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-interaction/[0.08] bg-surface-panel px-3 py-1.5">
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
@@ -342,7 +351,7 @@ export const SqlWorkspace: React.FC<Props> = ({
           </button>
 
           {/* Connection / Database / Schema selectors */}
-          <div className="flex items-center gap-1.5 border-l border-white/[0.08] pl-2">
+          <div className="flex items-center gap-1.5 border-l border-interaction/[0.08] pl-2">
             <select
               value={selectedConnId}
               onChange={(e) => handleConnectionChange(e.target.value)}
@@ -406,7 +415,7 @@ export const SqlWorkspace: React.FC<Props> = ({
             onClick={() => setHistoryOpen((v) => !v)}
             className="apple-btn-secondary"
           >
-            <Clock className="h-3.5 w-3.5 text-[#ff9f0a]" />
+            <Clock className="h-3.5 w-3.5 text-icon-orange" />
             历史 ({history.length})
           </button>
           <button
@@ -424,7 +433,7 @@ export const SqlWorkspace: React.FC<Props> = ({
               onClick={() => setExportSql(currentResult.statement || null)}
               className="apple-btn-secondary"
             >
-              <Download className="h-3.5 w-3.5 text-[#30d158]" />
+              <Download className="h-3.5 w-3.5 text-icon-green" />
               导出结果
             </button>
           )}
@@ -469,7 +478,7 @@ export const SqlWorkspace: React.FC<Props> = ({
       )}
 
       {/* Editor */}
-      <div className="h-64 shrink-0 border-b border-slate-800 bg-[#282c34]" ref={editorHostRef} />
+      <div className="h-64 shrink-0 border-b border-slate-800 bg-surface-code" ref={editorHostRef} />
 
       <div className="flex items-center justify-between border-b border-slate-800 bg-slate-900/60 px-3 py-1 text-[11px] text-slate-400">
         <span className="flex items-center gap-1.5">
@@ -500,7 +509,7 @@ export const SqlWorkspace: React.FC<Props> = ({
                   onClick={() => setActiveResultIdx(i)}
                   className={`whitespace-nowrap rounded px-2.5 py-1 text-xs ${
                     i === activeResultIdx
-                      ? 'bg-indigo-600 text-white'
+                      ? 'bg-indigo-600 text-on-accent'
                       : r.error
                       ? 'bg-rose-950 text-rose-300 hover:bg-rose-900'
                       : 'text-slate-300 hover:bg-slate-800'

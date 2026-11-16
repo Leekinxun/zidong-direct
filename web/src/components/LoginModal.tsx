@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Lock } from 'lucide-react';
 import { api, ApiError } from '../api/client';
 import { BrandLogo } from './BrandLogo';
+import { ThemeSwitcher } from './ThemeSwitcher';
 
 interface Props {
   onSuccess: (username: string) => void;
@@ -28,22 +29,23 @@ export const LoginModal: React.FC<Props> = ({ onSuccess }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#161618]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-surface-base">
       <form
         onSubmit={handleSubmit}
-        className="w-full max-w-sm rounded-2xl border border-white/[0.12] bg-[#212125] p-6 shadow-2xl"
+        className="w-full max-w-sm rounded-2xl border border-interaction/[0.12] bg-surface-login p-6 shadow-2xl"
       >
         <div className="mb-5 flex items-center gap-3">
           <BrandLogo className="h-10 w-10 drop-shadow" />
-          <div>
-            <h1 className="text-base font-semibold tracking-tight text-white">紫东直连</h1>
-            <p className="text-xs text-[#9e9ea9]">多源数据库直连管理工作台</p>
+          <div className="flex-1">
+            <h1 className="text-base font-semibold tracking-tight text-strong">紫东直连</h1>
+            <p className="text-xs text-content-muted">多源数据库直连管理工作台</p>
           </div>
+          <ThemeSwitcher />
         </div>
 
         <div className="space-y-3">
           <div>
-            <label className="mb-1 block text-xs text-[#cacad1]">用户名</label>
+            <label className="mb-1 block text-xs text-content-label">用户名</label>
             <input
               type="text"
               value={username}
@@ -54,7 +56,7 @@ export const LoginModal: React.FC<Props> = ({ onSuccess }) => {
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs text-[#cacad1]">密码</label>
+            <label className="mb-1 block text-xs text-content-label">密码</label>
             <input
               type="password"
               value={password}
@@ -66,7 +68,7 @@ export const LoginModal: React.FC<Props> = ({ onSuccess }) => {
         </div>
 
         {error && (
-          <div className="mt-3 rounded-[7px] border border-[#ff453a]/30 bg-[#ff453a]/15 px-3 py-2 text-xs text-[#ff6961]">
+          <div className="mt-3 rounded-[7px] border border-danger/30 bg-danger/15 px-3 py-2 text-xs text-icon-red">
             {error}
           </div>
         )}

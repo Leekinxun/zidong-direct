@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react';
+import { initializeTheme, type Theme } from './theme';
 
 interface SqlHistoryItem {
   sql: string;
@@ -8,6 +9,7 @@ interface SqlHistoryItem {
 }
 
 interface DesktopPreferences {
+  theme?: Theme;
   sidebarWidth?: number;
   sqlHistory?: SqlHistoryItem[];
 }
@@ -18,6 +20,8 @@ declare global {
   interface Window {
     zidongDesktop?: {
       getPreferences(): Promise<DesktopPreferences>;
+      setTheme(theme: Theme): Promise<void>;
+      onThemeChanged(callback: (theme: Theme) => void): () => void;
       setSidebarWidth(width: number): Promise<void>;
       setSqlHistory(history: SqlHistoryItem[]): Promise<void>;
     };
@@ -83,6 +87,7 @@ export async function loadDesktopPreferences(): Promise<void> {
   try {
     if (!window.zidongDesktop) throw new Error('桌面首选项接口不可用');
     const preferences = await window.zidongDesktop.getPreferences();
+    initializeTheme(preferences.theme);
     desktopSidebarWidth = preferences.sidebarWidth;
     cachedHistory = preferences.sqlHistory ?? EMPTY_SQL_HISTORY;
   } catch {

@@ -259,7 +259,7 @@ export const StructureDesigner: React.FC<Props> = ({
   return (
     <div className="flex h-full flex-col bg-slate-950 select-none">
       {/* Top Navicat-Style Table Designer Action Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/[0.08] bg-[#1e1e21] px-3 py-1.5">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-interaction/[0.08] bg-surface-panel px-3 py-1.5">
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
@@ -277,7 +277,7 @@ export const StructureDesigner: React.FC<Props> = ({
               onClick={addColumn}
               className="apple-btn-secondary"
             >
-              <Plus className="h-3.5 w-3.5 text-[#30d158]" />
+              <Plus className="h-3.5 w-3.5 text-icon-green" />
               添加字段
             </button>
           )}
@@ -287,7 +287,7 @@ export const StructureDesigner: React.FC<Props> = ({
               onClick={addIndex}
               className="apple-btn-secondary"
             >
-              <Plus className="h-3.5 w-3.5 text-[#30d158]" />
+              <Plus className="h-3.5 w-3.5 text-icon-green" />
               添加索引
             </button>
           )}
@@ -297,15 +297,15 @@ export const StructureDesigner: React.FC<Props> = ({
               onClick={addFK}
               className="apple-btn-secondary"
             >
-              <Plus className="h-3.5 w-3.5 text-[#30d158]" />
+              <Plus className="h-3.5 w-3.5 text-icon-green" />
               添加外键
             </button>
           )}
 
-          <div className="mx-1 h-4 w-px bg-white/[0.08]" />
+          <div className="mx-1 h-4 w-px bg-interaction/[0.08]" />
 
           <div className="flex items-center gap-1.5">
-            <span className="text-xs text-[#9e9ea9]">表名：</span>
+            <span className="text-xs text-content-muted">表名：</span>
             <input
               type="text"
               value={tableName}
@@ -316,14 +316,14 @@ export const StructureDesigner: React.FC<Props> = ({
 
           {engine !== 'sqlite' && (
             <div className="flex items-center gap-1.5">
-              <span className="text-xs text-[#9e9ea9]">表注释：</span>
+              <span className="text-xs text-content-muted">表注释：</span>
               <textarea
                 rows={1}
                 value={tableComment}
                 onChange={(e) => setTableComment(e.target.value)}
                 placeholder="输入或查看表注释..."
                 title="拖动右下角可调整表注释框宽度与高度"
-                className="h-7 min-h-7 max-h-36 min-w-[180px] max-w-[520px] resize rounded border border-white/[0.1] bg-[#141417] px-2.5 py-1 text-xs text-slate-100 outline-none focus:border-indigo-500"
+                className="h-7 min-h-7 max-h-36 min-w-[180px] max-w-[520px] resize rounded border border-interaction/[0.1] bg-surface-designer px-2.5 py-1 text-xs text-slate-100 outline-none focus:border-indigo-500"
               />
             </div>
           )}
@@ -337,7 +337,7 @@ export const StructureDesigner: React.FC<Props> = ({
               className="apple-btn-secondary"
               title="切换到数据表视图"
             >
-              <Table2 className="h-3.5 w-3.5 text-[#64d2ff]" />
+              <Table2 className="h-3.5 w-3.5 text-icon-cyan" />
               打开表数据
             </button>
           )}
@@ -345,7 +345,7 @@ export const StructureDesigner: React.FC<Props> = ({
       </div>
 
       {/* Apple Segmented Sub-Tab Strip: 字段 | 索引 | 外键 | SQL 预览 */}
-      <div className="flex items-center border-b border-white/[0.08] bg-[#1a1a1d] px-3 py-1.5 text-xs">
+      <div className="flex items-center border-b border-interaction/[0.08] bg-surface-inset px-3 py-1.5 text-xs">
         <div className="apple-segmented">
           <button
             type="button"
@@ -871,7 +871,7 @@ export const StructureDesigner: React.FC<Props> = ({
                 type="button"
                 disabled={executing}
                 onClick={() => void handleSaveAndExecute()}
-                className="flex items-center gap-1.5 rounded bg-emerald-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+                className="flex items-center gap-1.5 rounded bg-emerald-600 px-4 py-1.5 text-xs font-medium text-on-accent hover:bg-emerald-500 disabled:opacity-50"
               >
                 {executing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
                 立即执行此 SQL 变更

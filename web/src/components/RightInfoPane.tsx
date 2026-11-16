@@ -164,9 +164,9 @@ export const RightInfoPane: React.FC<Props> = ({
   };
 
   return (
-    <aside className="flex h-full w-80 shrink-0 flex-col border-l border-white/[0.08] bg-[#1e1e21] text-[13px] select-none">
+    <aside className="flex h-full w-80 shrink-0 flex-col border-l border-interaction/[0.08] bg-surface-panel text-[13px] select-none">
       {/* Info Pane Header Segmented Tabs */}
-      <div className="flex items-center justify-center border-b border-white/[0.08] bg-[#1a1a1d] px-3 py-2.5">
+      <div className="flex items-center justify-center border-b border-interaction/[0.08] bg-surface-inset px-3 py-2.5">
         <div className="apple-segmented w-full justify-between">
           <button
             type="button"
@@ -373,7 +373,7 @@ export const RightInfoPane: React.FC<Props> = ({
                             type="button"
                             disabled={savingTableComment}
                             onClick={() => void handleSaveTableComment()}
-                            className="inline-flex items-center gap-1 rounded bg-indigo-600 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+                            className="inline-flex items-center gap-1 rounded bg-indigo-600 px-2.5 py-1 text-[11px] font-medium text-on-accent hover:bg-indigo-500 disabled:opacity-50"
                           >
                             {savingTableComment ? (
                               <Loader2 className="h-3 w-3 animate-spin" />
@@ -488,7 +488,7 @@ export const RightInfoPane: React.FC<Props> = ({
                             type="button"
                             disabled={savingDbComment}
                             onClick={() => void handleSaveDbComment()}
-                            className="inline-flex items-center gap-1 rounded bg-indigo-600 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+                            className="inline-flex items-center gap-1 rounded bg-indigo-600 px-2.5 py-1 text-[11px] font-medium text-on-accent hover:bg-indigo-500 disabled:opacity-50"
                           >
                             {savingDbComment ? (
                               <Loader2 className="h-3 w-3 animate-spin" />

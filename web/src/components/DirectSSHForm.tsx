@@ -139,11 +139,11 @@ export function DirectSSHForm({ visible, initialSettings, onConnect, onSaveHost 
           未填写指纹时临时跳过主机验证
         </label>
         <div className="flex flex-wrap items-center gap-2">
-          <button type="submit" disabled={saving} className="rounded bg-indigo-600 px-3 py-1.5 font-medium text-white hover:bg-indigo-500 disabled:opacity-50">
+          <button type="submit" disabled={saving} className="rounded bg-indigo-600 px-3 py-1.5 font-medium text-on-accent hover:bg-indigo-500 disabled:opacity-50">
             连接
           </button>
           {onSaveHost && (
-            <button type="button" disabled={saving} onClick={(event) => void saveHost(event)} className="rounded bg-slate-700 px-3 py-1.5 font-medium text-white hover:bg-slate-600 disabled:opacity-50">
+            <button type="button" disabled={saving} onClick={(event) => void saveHost(event)} className="rounded bg-slate-700 px-3 py-1.5 font-medium text-strong hover:bg-slate-600 disabled:opacity-50">
               {saving ? '正在保存…' : '保存 SSH 主机'}
             </button>
           )}

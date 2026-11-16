@@ -273,7 +273,7 @@ export const ObjectBrowserPane: React.FC<Props> = ({
   return (
     <div className="flex h-full flex-col bg-slate-950 select-none">
       {/* Navicat-Style Object Action Sub-Toolbar */}
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/[0.08] bg-[#1e1e21] px-3 py-1.5">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-interaction/[0.08] bg-surface-panel px-3 py-1.5">
         <div className="flex flex-wrap items-center gap-1.5">
           {category !== 'queries' ? (
             <>
@@ -312,7 +312,7 @@ export const ObjectBrowserPane: React.FC<Props> = ({
                 className="apple-btn-secondary"
                 title="设计选中表的字段、索引与外键"
               >
-                <Edit3 className="h-3.5 w-3.5 text-[#ff9f0a]" />
+                <Edit3 className="h-3.5 w-3.5 text-icon-orange" />
                 设计表
               </button>
 
@@ -321,7 +321,7 @@ export const ObjectBrowserPane: React.FC<Props> = ({
                 onClick={() => onDesignTable(connection, database, effectiveSchema, '', 'create')}
                 className="apple-btn-secondary"
               >
-                <FilePlus2 className="h-3.5 w-3.5 text-[#30d158]" />
+                <FilePlus2 className="h-3.5 w-3.5 text-icon-green" />
                 新建表
               </button>
 
@@ -348,11 +348,11 @@ export const ObjectBrowserPane: React.FC<Props> = ({
                 className="apple-btn-secondary"
                 title="清空表中所有数据 (DELETE FROM)"
               >
-                <Eraser className="h-3.5 w-3.5 text-[#ff9f0a]" />
+                <Eraser className="h-3.5 w-3.5 text-icon-orange" />
                 清空表
               </button>
 
-              <div className="mx-1 h-4 w-px bg-white/[0.08]" />
+              <div className="mx-1 h-4 w-px bg-interaction/[0.08]" />
 
               <button
                 type="button"
@@ -364,7 +364,7 @@ export const ObjectBrowserPane: React.FC<Props> = ({
                 }
                 className="apple-btn-secondary"
               >
-                <Upload className="h-3.5 w-3.5 text-[#5e5ce6]" />
+                <Upload className="h-3.5 w-3.5 text-icon-purple" />
                 导入
               </button>
 
@@ -380,7 +380,7 @@ export const ObjectBrowserPane: React.FC<Props> = ({
                 }
                 className="apple-btn-secondary"
               >
-                <Download className="h-3.5 w-3.5 text-[#30d158]" />
+                <Download className="h-3.5 w-3.5 text-icon-green" />
                 导出
               </button>
             </>
@@ -439,7 +439,7 @@ export const ObjectBrowserPane: React.FC<Props> = ({
           )}
 
           <div className="relative flex items-center">
-            <Search className="pointer-events-none absolute left-2 h-3.5 w-3.5 text-[#767682]" />
+            <Search className="pointer-events-none absolute left-2 h-3.5 w-3.5 text-content-subtle" />
             <input
               type="text"
               placeholder="搜索对象..."
@@ -451,7 +451,7 @@ export const ObjectBrowserPane: React.FC<Props> = ({
               <button
                 type="button"
                 onClick={() => setFilterText('')}
-                className="absolute right-1.5 text-[#9e9ea9] hover:text-white"
+                className="absolute right-1.5 text-content-muted hover:text-strong"
               >
                 <X className="h-3 w-3" />
               </button>
@@ -484,7 +484,7 @@ export const ObjectBrowserPane: React.FC<Props> = ({
       </div>
 
       {/* Object Type Filter Bar (All / Tables / Views / Queries) */}
-      <div className="flex items-center justify-between border-b border-white/[0.08] bg-[#1a1a1d] px-3 py-1.5 text-xs">
+      <div className="flex items-center justify-between border-b border-interaction/[0.08] bg-surface-inset px-3 py-1.5 text-xs">
         <div className="apple-segmented">
           <button
             type="button"
@@ -498,7 +498,7 @@ export const ObjectBrowserPane: React.FC<Props> = ({
             onClick={() => onCategoryChange('tables')}
             className={`apple-segmented-item ${category === 'tables' ? 'apple-segmented-item-active' : ''}`}
           >
-            <Table2 className="h-3 w-3 text-[#64d2ff]" />
+            <Table2 className="h-3 w-3 text-icon-cyan" />
             表 ({tableObjects.length})
           </button>
           <button
@@ -506,7 +506,7 @@ export const ObjectBrowserPane: React.FC<Props> = ({
             onClick={() => onCategoryChange('views')}
             className={`apple-segmented-item ${category === 'views' ? 'apple-segmented-item-active' : ''}`}
           >
-            <Eye className="h-3 w-3 text-[#5ac8fa]" />
+            <Eye className="h-3 w-3 text-icon-teal" />
             视图 ({viewObjects.length})
           </button>
           <button
@@ -514,20 +514,20 @@ export const ObjectBrowserPane: React.FC<Props> = ({
             onClick={() => onCategoryChange('queries')}
             className={`apple-segmented-item ${category === 'queries' ? 'apple-segmented-item-active' : ''}`}
           >
-            <Terminal className="h-3 w-3 text-[#30d158]" />
+            <Terminal className="h-3 w-3 text-icon-green" />
             最近查询 ({savedQueries.length})
           </button>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 text-[11px] text-[#9e9ea9]">
+        <div className="flex flex-wrap items-center gap-2 text-[11px] text-content-muted">
           <span>
-            当前位置：<span className="font-medium text-white">{connection.name}</span>
+            当前位置：<span className="font-medium text-strong">{connection.name}</span>
             {database ? ` / ${database}` : ''}
             {schema ? ` / ${schema}` : ''}
           </span>
           {dbDetails?.commentSupported && (
             <span
-              className="max-w-xs truncate rounded bg-white/[0.06] px-2 py-0.5 text-[11px] text-[#d6d6de]"
+              className="max-w-xs truncate rounded bg-interaction/[0.06] px-2 py-0.5 text-[11px] text-content-detail"
               title={dbDetails.comment || '当前数据库未设置注释'}
             >
               库注释：{dbDetails.comment || '未设置'}
@@ -537,7 +537,7 @@ export const ObjectBrowserPane: React.FC<Props> = ({
             <button
               type="button"
               onClick={onShowDetails}
-              className="inline-flex items-center gap-1 rounded border border-white/[0.1] bg-white/[0.05] px-2 py-0.5 text-[11px] text-[#64d2ff] hover:bg-white/[0.1]"
+              className="inline-flex items-center gap-1 rounded border border-interaction/[0.1] bg-interaction/[0.05] px-2 py-0.5 text-[11px] text-icon-cyan hover:bg-interaction/[0.1]"
               title="打开右侧属性与注释面板"
             >
               <Info className="h-3 w-3" />
@@ -553,7 +553,7 @@ export const ObjectBrowserPane: React.FC<Props> = ({
       {actionNotice && (
         <div className="flex items-center justify-between border-b border-emerald-800 bg-emerald-950/60 px-3 py-1.5 text-xs text-emerald-200">
           <span>{actionNotice}</span>
-          <button type="button" onClick={() => setActionNotice('')} className="text-emerald-300 hover:text-white">
+          <button type="button" onClick={() => setActionNotice('')} className="text-emerald-300 hover:text-strong">
             <X className="h-3.5 w-3.5" />
           </button>
         </div>
@@ -569,7 +569,7 @@ export const ObjectBrowserPane: React.FC<Props> = ({
               <button
                 type="button"
                 onClick={() => onOpenQuery(connection, database, effectiveSchema)}
-                className="mt-1 flex items-center gap-1 rounded bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-500"
+                className="mt-1 flex items-center gap-1 rounded bg-emerald-600 px-3 py-1.5 text-xs font-medium text-on-accent hover:bg-emerald-500"
               >
                 <Plus className="h-3.5 w-3.5" />
                 新建查询
@@ -619,7 +619,7 @@ export const ObjectBrowserPane: React.FC<Props> = ({
               <button
                 type="button"
                 onClick={() => onDesignTable(connection, database, effectiveSchema, '', 'create')}
-                className="flex items-center gap-1 rounded bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-500"
+                className="flex items-center gap-1 rounded bg-indigo-600 px-3 py-1.5 text-xs font-medium text-on-accent hover:bg-indigo-500"
               >
                 <FilePlus2 className="h-3.5 w-3.5" />
                 新建表
@@ -668,7 +668,7 @@ export const ObjectBrowserPane: React.FC<Props> = ({
                     }}
                     className={`cursor-pointer border-b border-slate-900 transition-colors ${
                       isSelected
-                        ? 'bg-indigo-950/75 text-white'
+                        ? 'bg-indigo-950/75 text-strong'
                         : 'text-slate-200 hover:bg-slate-900/70'
                     }`}
                   >
@@ -763,7 +763,7 @@ export const ObjectBrowserPane: React.FC<Props> = ({
                   }}
                   className={`flex cursor-pointer items-center gap-3 rounded-xl border px-3.5 py-3 transition ${
                     isSelected
-                      ? 'border-indigo-500 bg-indigo-950/70 text-white'
+                      ? 'border-indigo-500 bg-indigo-950/70 text-strong'
                       : 'border-slate-800/90 bg-slate-900/60 text-slate-200 hover:border-slate-700 hover:bg-slate-900'
                   }`}
                 >
@@ -825,7 +825,7 @@ export const ObjectBrowserPane: React.FC<Props> = ({
               setContextMenu(null);
               onOpenTableData(connection, database, obj.schema || effectiveSchema, obj.name);
             }}
-            className="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-indigo-600 hover:text-white"
+            className="theme-menu-item flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-indigo-600 hover:text-on-accent"
           >
             <FolderOpen className="h-3.5 w-3.5 text-sky-400" />
             打开表
@@ -838,7 +838,7 @@ export const ObjectBrowserPane: React.FC<Props> = ({
                 setContextMenu(null);
                 onDesignTable(connection, database, obj.schema || effectiveSchema, obj.name, 'alter');
               }}
-              className="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-indigo-600 hover:text-white"
+              className="theme-menu-item flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-indigo-600 hover:text-on-accent"
             >
               <Edit3 className="h-3.5 w-3.5 text-amber-400" />
               设计表结构
@@ -850,7 +850,7 @@ export const ObjectBrowserPane: React.FC<Props> = ({
               setContextMenu(null);
               onDesignTable(connection, database, effectiveSchema, '', 'create');
             }}
-            className="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-indigo-600 hover:text-white"
+            className="theme-menu-item flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-indigo-600 hover:text-on-accent"
           >
             <FilePlus2 className="h-3.5 w-3.5 text-emerald-400" />
             新建表...
@@ -867,7 +867,7 @@ export const ObjectBrowserPane: React.FC<Props> = ({
                 buildSelectPreviewSql(connection, obj.schema || effectiveSchema, obj.name),
               );
             }}
-            className="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-indigo-600 hover:text-white"
+            className="theme-menu-item flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-indigo-600 hover:text-on-accent"
           >
             <Terminal className="h-3.5 w-3.5 text-emerald-400" />
             新建查询 (SELECT 前100条)
@@ -880,7 +880,7 @@ export const ObjectBrowserPane: React.FC<Props> = ({
               setContextMenu(null);
               setIoModal({ mode: 'import', table: obj.name });
             }}
-            className="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-indigo-600 hover:text-white"
+            className="theme-menu-item flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-indigo-600 hover:text-on-accent"
           >
             <Upload className="h-3.5 w-3.5 text-indigo-400" />
             导入向导...
@@ -892,7 +892,7 @@ export const ObjectBrowserPane: React.FC<Props> = ({
               setContextMenu(null);
               setIoModal({ mode: 'export', table: obj.name });
             }}
-            className="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-indigo-600 hover:text-white"
+            className="theme-menu-item flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-indigo-600 hover:text-on-accent"
           >
             <Download className="h-3.5 w-3.5 text-teal-400" />
             导出向导...
@@ -903,7 +903,7 @@ export const ObjectBrowserPane: React.FC<Props> = ({
               void navigator.clipboard?.writeText(contextMenu.object.name);
               setContextMenu(null);
             }}
-            className="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-indigo-600 hover:text-white"
+            className="theme-menu-item flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-indigo-600 hover:text-on-accent"
           >
             <Copy className="h-3.5 w-3.5 text-slate-400" />
             复制对象名

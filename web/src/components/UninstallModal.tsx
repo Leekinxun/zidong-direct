@@ -98,7 +98,7 @@ export const UninstallModal: React.FC<Props> = ({ onClose, onResetCompleted }) =
             type="button"
             onClick={onClose}
             aria-label="关闭"
-            className="rounded p-1 text-slate-400 hover:bg-slate-800 hover:text-white"
+            className="rounded p-1 text-slate-400 hover:bg-slate-800 hover:text-strong"
           >
             <X className="h-4 w-4" />
           </button>
@@ -170,7 +170,7 @@ export const UninstallModal: React.FC<Props> = ({ onClose, onResetCompleted }) =
                   (!clearConnections && !clearSqliteFiles && !clearBrowserCache)
                 }
                 onClick={() => void handleResetWorkspace()}
-                className="inline-flex items-center gap-1.5 rounded bg-rose-600 px-3.5 py-1.5 font-medium text-white hover:bg-rose-500 disabled:opacity-40"
+                className="inline-flex items-center gap-1.5 rounded bg-rose-600 px-3.5 py-1.5 font-medium text-on-accent hover:bg-rose-500 disabled:opacity-40"
               >
                 {working ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />

@@ -648,7 +648,7 @@ export const ConnectionModal: React.FC<Props> = ({
             </div>
           )}
 
-          <div className="mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-white/[0.08] pt-4">
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-interaction/[0.08] pt-4">
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
@@ -676,7 +676,7 @@ export const ConnectionModal: React.FC<Props> = ({
                   onClick={() => void handleSaveHostOnly()}
                   className="apple-btn-secondary px-3.5 py-1.5"
                 >
-                  {savingHost ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Server className="h-3.5 w-3.5 text-[#64d2ff]" aria-hidden="true" />}
+                  {savingHost ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Server className="h-3.5 w-3.5 text-icon-cyan" aria-hidden="true" />}
                   {savingHost ? '保存中...' : '保存为 SSH 主机'}
                 </button>
               )}

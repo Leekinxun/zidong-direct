@@ -33,10 +33,10 @@ export function BrowserProxyDialog({ host, onClose }: { host: BrowserProxyHost; 
         if (event.key === 'Escape') onClose();
       }}>
       <section role="dialog" aria-modal="true" aria-labelledby="browser-proxy-title"
-        className="max-h-full w-full max-w-xl overflow-auto rounded-xl border border-white/10 bg-[#212124] p-4 text-sm shadow-2xl">
+        className="max-h-full w-full max-w-xl overflow-auto rounded-xl border border-interaction/10 bg-surface-toolbar p-4 text-sm shadow-2xl">
         <header className="mb-3 flex items-center justify-between gap-2">
           <h2 id="browser-proxy-title" className="font-semibold">通过 SSH 访问网页</h2>
-          <button type="button" aria-label="关闭浏览器代理设置" onClick={onClose} autoFocus className="rounded p-1 text-slate-400 hover:text-white">
+          <button type="button" aria-label="关闭浏览器代理设置" onClick={onClose} autoFocus className="rounded p-1 text-slate-400 hover:text-strong">
             <X className="h-4 w-4" />
           </button>
         </header>

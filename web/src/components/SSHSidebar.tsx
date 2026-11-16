@@ -14,7 +14,7 @@ interface Props {
   onSelectSession: (id: string) => void;
 }
 
-const row = 'flex w-full min-w-0 items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[12.5px] focus-visible:outline focus-visible:outline-1 focus-visible:outline-[#52a9ff]';
+const row = 'flex w-full min-w-0 items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[12.5px] focus-visible:outline focus-visible:outline-1 focus-visible:outline-icon-blue';
 
 export function SSHSidebar({
   connections, hosts, sessions, activeTabId, error, onNew, onOpenHost, onDeleteHost, onOpenSaved, onSelectSession,
@@ -23,8 +23,8 @@ export function SSHSidebar({
 
   return (
     <section aria-label="SSH 导航">
-      <header className="sticky top-0 z-10 flex items-center justify-between bg-[#1e1e21] px-3.5 py-2">
-        <h2 className="text-[12.5px] font-semibold tracking-wide text-[#b4b4be]">SSH 终端</h2>
+      <header className="sticky top-0 z-10 flex items-center justify-between bg-surface-panel px-3.5 py-2">
+        <h2 className="text-[12.5px] font-semibold tracking-wide text-content-caption">SSH 终端</h2>
         <button
           type="button"
           onClick={onNew}
@@ -32,7 +32,7 @@ export function SSHSidebar({
           title="新建 SSH 终端"
           className="apple-btn-secondary px-2.5 py-1 text-[12px]"
         >
-          <Plus aria-hidden="true" className="h-3.5 w-3.5 text-[#52a9ff]" />
+          <Plus aria-hidden="true" className="h-3.5 w-3.5 text-icon-blue" />
           新建
         </button>
       </header>
@@ -48,9 +48,9 @@ export function SSHSidebar({
                   onClick={() => onSelectSession(session.id)}
                   aria-current={active ? 'true' : undefined}
                   title={session.title}
-                  className={`${row} ${active ? 'bg-[#0a84ff]/20 text-white' : 'text-[#b4b4be] hover:bg-white/[0.06] hover:text-white'}`}
+                  className={`${row} ${active ? 'bg-accent/20 text-strong' : 'text-content-caption hover:bg-interaction/[0.06] hover:text-strong'}`}
                 >
-                  <TerminalSquare aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-[#64d2ff]" />
+                  <TerminalSquare aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-icon-cyan" />
                   <span className="truncate">{session.title}</span>
                 </button>
               </li>
@@ -60,7 +60,7 @@ export function SSHSidebar({
       )}
       {hosts.length > 0 && (
         <div className="pb-2">
-          <h3 className="px-3.5 pb-1 text-[11px] font-medium text-[#9e9ea9]">已保存的 SSH 主机</h3>
+          <h3 className="px-3.5 pb-1 text-[11px] font-medium text-content-muted">已保存的 SSH 主机</h3>
           <ul aria-label="已保存的 SSH 主机" className="space-y-0.5 px-2">
             {hosts.map((host) => (
               <li key={host.id} className="group flex items-center gap-1">
@@ -68,12 +68,12 @@ export function SSHSidebar({
                   type="button"
                   onClick={() => onOpenHost(host)}
                   title={`${host.username}@${host.host}:${host.port || 22}`}
-                  className={`${row} min-w-0 flex-1 text-[#b4b4be] hover:bg-white/[0.06] hover:text-white`}
+                  className={`${row} min-w-0 flex-1 text-content-caption hover:bg-interaction/[0.06] hover:text-strong`}
                 >
-                  <Server aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-[#64d2ff]" />
+                  <Server aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-icon-cyan" />
                   <span className="min-w-0 flex-1 truncate">{host.name}</span>
                   {host.name !== host.host && (
-                    <span className="max-w-[40%] truncate font-mono text-[10.5px] text-[#9e9ea9]">{host.host}</span>
+                    <span className="max-w-[40%] truncate font-mono text-[10.5px] text-content-muted">{host.host}</span>
                   )}
                 </button>
                 <button
@@ -81,7 +81,7 @@ export function SSHSidebar({
                   onClick={() => onDeleteHost(host)}
                   aria-label={`删除 SSH 主机 ${host.name}`}
                   title="删除 SSH 主机"
-                  className="shrink-0 rounded p-1.5 text-[#9e9ea9] opacity-0 hover:bg-rose-500/10 hover:text-rose-300 focus-visible:opacity-100 group-hover:opacity-100"
+                  className="shrink-0 rounded p-1.5 text-content-muted opacity-0 hover:bg-rose-500/10 hover:text-rose-300 focus-visible:opacity-100 group-hover:opacity-100"
                 >
                   <Trash2 aria-hidden="true" className="h-3.5 w-3.5" />
                 </button>
@@ -92,7 +92,7 @@ export function SSHSidebar({
       )}
       {savedConnections.length > 0 && (
         <div className="pb-2">
-          <h3 className="px-3.5 pb-1 text-[11px] font-medium text-[#9e9ea9]">数据库 SSH 设置</h3>
+          <h3 className="px-3.5 pb-1 text-[11px] font-medium text-content-muted">数据库 SSH 设置</h3>
           <ul aria-label="数据库 SSH 设置" className="space-y-0.5 px-2">
             {savedConnections.map((connection) => (
               <li key={connection.id}>
@@ -100,12 +100,12 @@ export function SSHSidebar({
                   type="button"
                   onClick={() => onOpenSaved(connection)}
                   title={`${connection.ssh.username}@${connection.ssh.host}:${connection.ssh.port || 22}`}
-                  className={`${row} text-[#b4b4be] hover:bg-white/[0.06] hover:text-white`}
+                  className={`${row} text-content-caption hover:bg-interaction/[0.06] hover:text-strong`}
                 >
-                  <Server aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-[#9e9ea9]" />
+                  <Server aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-content-muted" />
                   <span className="min-w-0 flex-1 truncate">{connection.name}</span>
                   {connection.name !== connection.ssh.host && (
-                    <span className="max-w-[45%] truncate font-mono text-[10.5px] text-[#9e9ea9]">{connection.ssh.host}</span>
+                    <span className="max-w-[45%] truncate font-mono text-[10.5px] text-content-muted">{connection.ssh.host}</span>
                   )}
                 </button>
               </li>
