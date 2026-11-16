@@ -15,7 +15,7 @@ func DesktopHandler(host, token string, next http.Handler) http.Handler {
 		w.Header().Set("X-Frame-Options", "DENY")
 		// Keep same-origin form requests from sending an opaque Origin.
 		w.Header().Set("Referrer-Policy", "same-origin")
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; object-src 'none'; frame-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; connect-src 'self' ws://"+host+"/api/terminal/sessions/; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; object-src 'none'; frame-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
 
 		origins := r.Header.Values("Origin")
 		if r.Host != host || len(origins) > 1 || (len(origins) == 1 && origins[0] != origin) {

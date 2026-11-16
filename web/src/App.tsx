@@ -3,6 +3,7 @@ import {
   ChevronDown,
   Database,
   Download,
+  ExternalLink,
   Eye,
   FilePlus2,
   KeyRound,
@@ -28,7 +29,7 @@ import { SSHSidebar } from './components/SSHSidebar';
 import { SidebarTree, type SelectedTreeContext } from './components/SidebarTree';
 import { SqlWorkspace } from './components/SqlWorkspace';
 import { StructureDesigner } from './components/StructureDesigner';
-import type { TerminalSSHSettings } from './components/TerminalSession';
+import type { TerminalEncoding, TerminalSSHSettings, TerminalTarget } from './components/TerminalSession';
 import { isDesktop } from './preferences';
 import type {
   ConnectionView,
@@ -41,9 +42,10 @@ import type {
 } from './types/db';
 
 const OBJECTS_TAB_ID = '__objects__';
-const TerminalWorkspace = React.lazy(() =>
-  import('./components/TerminalWorkspace').then(({ TerminalWorkspace }) => ({ default: TerminalWorkspace })),
+const TerminalPanes = React.lazy(() =>
+  import('./components/TerminalPanes').then(({ TerminalPanes }) => ({ default: TerminalPanes })),
 );
+const standaloneTerminal = isDesktop && new URLSearchParams(window.location.search).get('workspace') === 'terminal';
 
 type TerminalTab = {
   id: string;
@@ -52,6 +54,8 @@ type TerminalTab = {
   initialSettings?: TerminalSSHSettings;
   savedConnectionId?: string;
   savedHostId?: string;
+  autoConnect?: boolean;
+  encoding?: TerminalEncoding;
 };
 
 const ENGINE_MENU_ITEMS: Array<{ engine: EngineType; label: string; badge: string }> = [
@@ -81,8 +85,11 @@ export default function App() {
   const [selectedObject, setSelectedObject] = useState<DatabaseObject | null>(null);
   const [objectCategory, setObjectCategory] = useState<ObjectCategory>('tables');
   const [objectsTabOpen, setObjectsTabOpen] = useState(false);
-  const [tabs, setTabs] = useState<Array<WorkbenchTab | TerminalTab>>([]);
-  const [activeTabId, setActiveTabId] = useState<string>('');
+  const [tabs, setTabs] = useState<Array<WorkbenchTab | TerminalTab>>(() =>
+    standaloneTerminal ? [{ id: 'terminal:0', kind: 'terminal', title: 'SSH 终端' }] : [],
+  );
+  const [activeTabId, setActiveTabId] = useState(standaloneTerminal ? 'terminal:0' : '');
+  const [windowError, setWindowError] = useState('');
   const nextTerminalId = useRef(0);
 
   const [connMenuOpen, setConnMenuOpen] = useState(false);
@@ -172,20 +179,47 @@ export default function App() {
     setActiveTabId(tab.id);
   };
 
-  const openTerminal = ({ settings, saved, host }: {
+  const openTerminal = ({ settings, saved, host, autoConnect, encoding, title }: {
     settings?: TerminalSSHSettings;
     saved?: ConnectionView;
     host?: SSHHostView;
+    autoConnect?: boolean;
+    encoding?: TerminalEncoding;
+    title?: string;
   } = {}) => {
     const id = `terminal:${++nextTerminalId.current}`;
     openTab({
       id,
       kind: 'terminal',
-      title: host?.name || saved?.name || settings?.host || 'SSH 终端',
+      title: title || host?.name || saved?.name || settings?.host || 'SSH 终端',
       initialSettings: settings,
       savedConnectionId: saved?.id,
       savedHostId: host?.id,
+      autoConnect: autoConnect ?? Boolean(saved || host),
+      encoding,
     });
+  };
+
+  const handleCloneTerminal = (target: TerminalTarget, title?: string, encoding?: TerminalEncoding) => {
+    if ('sshHostId' in target) {
+      const host = sshHosts.find((h) => h.id === target.sshHostId);
+      if (host) openTerminal({ host, title, encoding });
+    } else if ('connectionId' in target) {
+      const saved = connections.find((c) => c.id === target.connectionId);
+      if (saved) openTerminal({ saved, title, encoding });
+    } else if ('ssh' in target) {
+      openTerminal({ settings: target.ssh, autoConnect: true, title, encoding });
+    }
+  };
+
+  const openTerminalWindow = async () => {
+    if (!window.zidongDesktop) return;
+    setWindowError('');
+    try {
+      await window.zidongDesktop.openTerminalWindow();
+    } catch (error) {
+      setWindowError(error instanceof Error ? error.message : '无法打开终端窗口');
+    }
   };
 
   const saveSSHHost = async (input: SSHHostSaveInput) => {
@@ -370,10 +404,32 @@ export default function App() {
   const hasAnyOpenTab = objectsTabOpen || tabs.length > 0;
   const terminalTabs = tabs.filter((tab): tab is TerminalTab => tab.kind === 'terminal');
   const activeTerminal = terminalTabs.find((tab) => tab.id === activeTabId);
+  const sshNavigation = isDesktop && (
+    <SSHSidebar
+      connections={connections}
+      hosts={sshHosts}
+      sessions={terminalTabs}
+      activeTabId={activeTabId}
+      error={sshHostError}
+      onNew={() => openTerminal()}
+      onOpenHost={(host) => openTerminal({ host })}
+      onDeleteHost={(host) => void removeSSHHost(host)}
+      onOpenSaved={(saved) => openTerminal({ saved })}
+      onSelectSession={setActiveTabId}
+    />
+  );
 
   return (
     <div className="flex h-screen flex-col bg-[#161618] text-[#f2f2f7] select-none">
       {/* Apple macOS Unified Vibrancy Toolbar */}
+      {standaloneTerminal ? (
+        <header className="flex shrink-0 items-center justify-between border-b border-white/[0.08] bg-[#212124] px-4 py-2 text-sm">
+          <span className="font-semibold">SSH 终端</span>
+          <button type="button" className="apple-btn-secondary" onClick={() => void openTerminalWindow()}>
+            <ExternalLink className="h-4 w-4" /> 新终端窗口
+          </button>
+        </header>
+      ) : (
       <header className="flex h-16 shrink-0 items-center justify-between border-b border-white/[0.08] bg-[#212124]/95 px-4 backdrop-blur-xl">
         <div className="flex items-center gap-1.5">
           {/* App Brand */}
@@ -538,6 +594,12 @@ export default function App() {
 
         {/* Right Side Controls: Info Pane Toggle + User */}
         <div className="flex items-center gap-2">
+          {isDesktop && (
+            <button type="button" aria-label="新终端窗口" title="新终端窗口（Ctrl+Shift+N）"
+              onClick={() => void openTerminalWindow()} className="apple-btn-secondary">
+              <ExternalLink className="h-4 w-4" />
+            </button>
+          )}
           {!activeTerminal && (
             <button
               type="button"
@@ -565,10 +627,16 @@ export default function App() {
           )}
         </div>
       </header>
+      )}
+      {windowError && <p role="alert" className="bg-red-950 px-4 py-2 text-xs text-red-200">{windowError}</p>}
 
       {/* Main Split Area */}
       <div className="flex min-h-0 flex-1">
-        <SidebarTree
+        {standaloneTerminal ? (
+          <aside className="w-64 shrink-0 overflow-y-auto border-r border-white/[0.08] bg-[#1e1e21]">
+            {sshNavigation}
+          </aside>
+        ) : <SidebarTree
           connections={connections}
           capabilities={capabilities}
           selectedContext={selectedContext}
@@ -599,21 +667,8 @@ export default function App() {
           } : undefined}
           refreshSignal={refreshSignal}
           sshFirst={Boolean(activeTerminal) || sshHosts.length > 0}
-          sshSection={isDesktop && (
-            <SSHSidebar
-              connections={connections}
-              hosts={sshHosts}
-              sessions={terminalTabs}
-              activeTabId={activeTabId}
-              error={sshHostError}
-              onNew={() => openTerminal()}
-              onOpenHost={(host) => openTerminal({ host })}
-              onDeleteHost={(host) => void removeSSHHost(host)}
-              onOpenSaved={(saved) => openTerminal({ saved })}
-              onSelectSession={setActiveTabId}
-            />
-          )}
-        />
+          sshSection={sshNavigation}
+        />}
 
         {/* Center Multi-Tab Workspace */}
         <main className="flex min-w-0 flex-1 flex-col bg-[#161618]">
@@ -686,7 +741,13 @@ export default function App() {
 
           {/* Tab Content or Clean Apple Empty State */}
           <div className="min-h-0 flex-1">
-            {!hasAnyOpenTab ? (
+            {!hasAnyOpenTab && standaloneTerminal ? (
+              <div className="flex h-full items-center justify-center">
+                <button type="button" className="apple-btn-primary" onClick={() => openTerminal()}>
+                  <Plus className="h-4 w-4" /> 新建 SSH 终端
+                </button>
+              </div>
+            ) : !hasAnyOpenTab ? (
               <div className="flex h-full flex-col items-center justify-center gap-6 p-8 text-center">
                 <BrandLogo className="h-20 w-20 drop-shadow-xl" />
                 <div className="space-y-2">
@@ -758,19 +819,22 @@ export default function App() {
                     <div key={tab.id} className={hidden ? 'hidden' : 'h-full'}>
                       {tab.kind === 'terminal' && (
                         <React.Suspense fallback={<div role="status" className="p-4 text-sm text-slate-400">正在加载 SSH 终端</div>}>
-                          <TerminalWorkspace
+                          <TerminalPanes
                             active={!hidden}
+                            initialTitle={tab.title}
                             connections={connections}
                             sshHosts={sshHosts}
                             initialSource={tab.savedConnectionId || tab.savedHostId ? 'saved' : 'direct'}
                             initialConnectionId={tab.savedConnectionId || selectedContext?.connection.id}
                             initialHostId={tab.savedHostId}
-                            autoConnect={Boolean(tab.savedConnectionId || tab.savedHostId)}
+                            autoConnect={tab.autoConnect ?? Boolean(tab.savedConnectionId || tab.savedHostId)}
                             initialSettings={tab.initialSettings}
+                            initialEncoding={tab.encoding}
                             onSaveHost={saveSSHHost}
                             onDestinationChange={(title) => setTabs((previous) =>
-                              previous.map((item) => item.id === tab.id ? { ...item, title } : item),
+                              previous.map((item) => item.id === tab.id && item.title !== title ? { ...item, title } : item),
                             )}
+                            onCloneTerminal={handleCloneTerminal}
                           />
                         </React.Suspense>
                       )}

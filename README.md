@@ -67,7 +67,10 @@
   - 支持 SSH 密码认证与私钥认证（含私钥口令 Passphrase），支持 SHA256 主机指纹校验，断开连接或删除连接时自动清理隧道资源。
   - 桌面版可从左侧 SSH 区打开已保存的 SSH 设置，或新建终端页签后直接填写服务器地址和认证信息。终端与数据库页签共用工作区，切换页签时会话继续运行，关闭终端页签会断开连接。
   - 在终端连接表单或数据库窗口的 SSH 页签点「保存 SSH 主机」，可独立保存服务器配置。左侧「已保存的 SSH 主机」中的条目点击即打开终端页签并连接。数据库条目右键可「另存为 SSH 主机」。
-  - 从数据库连接窗口的 SSH 页签可测试终端连接，也可点「打开 SSH 终端」把当前输入带入新页签。选中终端内容后用 `Ctrl+Shift+C` 复制，用 `Ctrl+Shift+V` 粘贴。多行粘贴需要确认，`Ctrl+C` 向远端发送中断。
+  - 从数据库连接窗口的 SSH 页签可测试终端连接，也可点「打开 SSH 终端」把当前输入带入新页签。终端支持右键操作菜单（复制、粘贴、粘贴选中文本、搜索、复用连接打开新标签、重新连接、清屏、断开连接、命令输入）。支持快捷键 `Ctrl+F`（macOS 为 `Command+F`）打开终端搜索，支持 `Alt+I`（macOS 为 `Option+I`）打开独立命令输入条。选中终端内容后用 `Ctrl+Shift+C` 复制，用 `Ctrl+Shift+V` 粘贴。多行粘贴需要确认，`Ctrl+C` 向远端发送中断。
+  - 鼠标放在终端、SQL 编辑器、查询结果或表格上，按住 Ctrl（macOS 也可按 Command）滚动滚轮即可调整字号。数据库和终端的字号分别保存。
+  - 终端工具栏可选 UTF-8、GBK 或 GB18030，编码在连接或重连时生效。可用「新终端窗口」或 `Ctrl+Shift+N` 打开独立窗口。垂直或水平分屏会为新窗格打开单独会话，拖动分隔线可调整大小，关闭窗格会断开其中的会话。
+  - 「通过服务器代理 Chrome」会以临时配置启动本机 Chrome，网页连接经选定的 SSH 主机转发。代理 Chrome 中的 `127.0.0.1` 指向 SSH 主机。关闭代理浏览器会清理转发。Chrome 安装在非标准路径时，可用 `ZIDONG_CHROME_PATH` 指定其可执行文件的绝对路径。
 - **数据导入与导出**
   - **导出**支持表数据（含当前筛选与排序）和单条 SQL 查询结果，格式包括 CSV、TXT、TSV、JSON、JSON Lines、XML、HTML、SQL INSERT、Excel（XLS、XLSX）、ODS、DBF 和平面 Parquet。CSV、TXT、TSV 可带 UTF-8 BOM，TXT 支持选择分隔符或按列指定定宽。
   - **导入**支持 CSV、TXT、TSV、定宽文本、JSON、JSON Lines、XML、Excel（XLS、XLSX、XLSM）、ODS、DBF、平面 Parquet 和本地 SQL 脚本。导入向导可预览字段、选择工作表，并按列名、位置或手动建立映射。
@@ -156,6 +159,8 @@ npm run package:win7:x64 --prefix desktop
 安装程序位于 `desktop/dist/Zidong-Direct-Win7-<版本>-x64-Setup.exe`。附加 `-- --dir` 可生成用于调试的未安装目录。构建机已有其他 Go 版本时，可将 `ZIDONG_WIN7_GO` 指向 Go 1.20.14 的 `go.exe`。 [Windows 构建工作流](./.github/workflows/desktop-win7.yml)
 
 桌面连接和 SQLite 文件位于 `%APPDATA%\Zidong Direct\workspace\data`，偏好和查询历史位于同一 `workspace` 目录。卸载保留用户档案。新连接的主密钥由 Windows DPAPI 保护。升级前退出应用并备份 `workspace`，DPAPI 密钥恢复需使用原 Windows 用户档案。
+
+桌面版默认可同时打开 16 个 SSH 会话。可在启动环境设置 `MAX_TERMINAL_SESSIONS` 调整上限，例如在 macOS 上运行 `MAX_TERMINAL_SESSIONS=24 npm run dev:electron`。
 
 卸载时可从 Windows 开始菜单运行「卸载 紫东直连」，或在应用内选择「文件 → 打开卸载面板」后，在「程序和功能」选择紫东直连。
 

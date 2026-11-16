@@ -14,13 +14,14 @@ import (
 )
 
 type Server struct {
-	cfg       config.Config
-	store     *store.ConnectionStore
-	pools     *db.PoolManager
-	auth      *AuthHandler
-	staticDir string
-	terminals terminalSessions
-	sshHosts  *store.SSHHostStore
+	cfg            config.Config
+	store          *store.ConnectionStore
+	pools          *db.PoolManager
+	auth           *AuthHandler
+	staticDir      string
+	terminals      terminalSessions
+	sshHosts       *store.SSHHostStore
+	browserProxies browserProxyRegistry
 }
 
 func NewServer(cfg config.Config, st *store.ConnectionStore, pools *db.PoolManager, cipher *crypto.Cipher, staticDir string, sshHosts *store.SSHHostStore) *Server {
@@ -76,6 +77,7 @@ func (s *Server) Handler() http.Handler {
 	routes.add("POST /api/import", s.handleImport)
 	s.addTerminalRoutes(&routes)
 	s.addSSHHostRoutes(&routes)
+	s.addBrowserProxyRoutes(&routes)
 
 	mux := http.NewServeMux()
 	mux.Handle("/", routes.withFallback(s.spaHandler()))

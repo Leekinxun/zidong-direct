@@ -18,6 +18,7 @@ require (
 	github.com/shakinm/xlsReader v0.9.12
 	github.com/sijms/go-ora/v2 v2.9.0
 	golang.org/x/crypto v0.33.0
+	golang.org/x/net v0.26.0
 	golang.org/x/sys v0.30.0
 	golang.org/x/text v0.22.0
 	// v1.32.0 and later use Go 1.21 APIs such as runtime.Pinner.

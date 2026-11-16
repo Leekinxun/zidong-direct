@@ -8,6 +8,8 @@ import (
 	"time"
 )
 
+const DefaultMaxTerminalSessions = 16
+
 type Config struct {
 	DesktopMode               bool
 	Port                      string
@@ -20,6 +22,7 @@ type Config struct {
 	AdminUser                 string
 	AdminPassword             string
 	MaxQueryRows              int
+	MaxTerminalSessions       int
 	MaxUploadBytes            int64
 	QueryTimeout              time.Duration
 }
@@ -44,6 +47,7 @@ func Load() Config {
 		AdminUser:                 getEnv("APP_ADMIN_USER", "admin"),
 		AdminPassword:             adminPassword,
 		MaxQueryRows:              getEnvInt("MAX_QUERY_ROWS", 1000),
+		MaxTerminalSessions:       getEnvInt("MAX_TERMINAL_SESSIONS", DefaultMaxTerminalSessions),
 		MaxUploadBytes:            getEnvInt64("MAX_UPLOAD_BYTES", 256*1024*1024),
 		QueryTimeout:              time.Duration(getEnvInt("QUERY_TIMEOUT_SECONDS", 60)) * time.Second,
 	}

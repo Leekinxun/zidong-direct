@@ -5,6 +5,7 @@ directories:
   output: dist
 files:
   - main.cjs
+  - browser-proxy.cjs
   - backend.cjs
   - profile.cjs
   - preload.cjs

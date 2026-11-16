@@ -38,6 +38,23 @@ test('serializes overlapping preference writes and reopens them', async (t) => {
   assert.throws(() => reopened.setSqlHistory([{ ...history[0], sql: '表'.repeat(800000) }]), RangeError);
 });
 
+test('persists independent database and terminal font sizes', async (t) => {
+  const dir = await createProfile(t);
+  const preferences = await openPreferences(dir);
+  await Promise.all([
+    preferences.setFontSize('databaseFontSize', 18),
+    preferences.setFontSize('terminalFontSize', 22),
+    preferences.setSidebarWidth(440),
+  ]);
+
+  assert.deepEqual((await openPreferences(dir)).get(), {
+    databaseFontSize: 18, terminalFontSize: 22, sidebarWidth: 440,
+  });
+  assert.throws(() => preferences.setFontSize('terminalFontSize', 33), RangeError);
+  assert.throws(() => preferences.setFontSize('databaseFontSize', 14.5), RangeError);
+  assert.throws(() => preferences.setFontSize('sidebarWidth', 12), RangeError);
+});
+
 test('preserves the imported key until backend readiness is confirmed', async (t) => {
   const dir = await createProfile(t);
   const metaDir = path.join(dir, 'meta');

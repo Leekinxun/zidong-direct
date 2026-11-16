@@ -4,23 +4,29 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/netip"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unicode"
 
+	"golang.org/x/net/websocket"
+
+	"web-db-client/internal/config"
 	"web-db-client/internal/db"
 	"web-db-client/internal/ssh"
-	"web-db-client/internal/store"
 )
 
 const (
-	maxTerminalSessions = 4
 	terminalAttachTTL   = 15 * time.Second
 	maxTerminalOpenBody = 64 * 1024
+	terminalOutputChunk = 16 * 1024
+	terminalWriteLimit  = 5 * time.Second
+	terminalAckTimeout  = 30 * time.Second
 )
 
 type terminalSession struct {
@@ -34,10 +40,10 @@ type terminalSessions struct {
 	sessions map[string]*terminalSession
 }
 
-func (sessions *terminalSessions) reserve(id string) bool {
+func (sessions *terminalSessions) reserve(id string, limit int) bool {
 	sessions.mu.Lock()
 	defer sessions.mu.Unlock()
-	if len(sessions.sessions) >= maxTerminalSessions {
+	if len(sessions.sessions) >= limit {
 		return false
 	}
 	if sessions.sessions == nil {
@@ -105,6 +111,7 @@ func (s *Server) addTerminalRoutes(routes *apiRoutes) {
 	}
 	routes.add("POST /api/terminal/sessions", s.handleOpenTerminal)
 	routes.add("GET /api/terminal/sessions/{id}/output", s.handleTerminalOutput)
+	routes.add("GET /api/terminal/sessions/{id}/stream", s.handleTerminalStream)
 	routes.add("POST /api/terminal/sessions/{id}/input", s.handleTerminalInput)
 	routes.add("POST /api/terminal/sessions/{id}/resize", s.handleTerminalResize)
 	routes.add("DELETE /api/terminal/sessions/{id}", s.handleCloseTerminal)
@@ -149,51 +156,16 @@ func normalizeDirectTerminalSSH(cfg *db.SSHConfig) error {
 
 func (s *Server) handleOpenTerminal(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		ConnectionID string        `json:"connectionId"`
-		SSHHostID    string        `json:"sshHostId"`
-		SSH          *db.SSHConfig `json:"ssh"`
+		sshSource
+		Encoding string `json:"encoding"`
 		terminalDimensions
 	}
 	if !decodeJSONBody(w, r, maxTerminalOpenBody, &req) {
 		return
 	}
-	sourceCount := 0
-	for _, present := range []bool{req.ConnectionID != "", req.SSHHostID != "", req.SSH != nil} {
-		if present {
-			sourceCount++
-		}
-	}
-	if sourceCount != 1 {
-		writeError(w, http.StatusBadRequest, "invalid_terminal_source", "请选择一个已保存的 SSH 来源或填写 SSH 服务器信息")
+	cfg := s.resolveSSHSource(w, req.sshSource, "invalid_terminal_source")
+	if cfg == nil {
 		return
-	}
-	cfg := req.SSH
-	switch {
-	case cfg != nil:
-		if err := normalizeDirectTerminalSSH(cfg); err != nil {
-			writeError(w, http.StatusBadRequest, "invalid_ssh_config", err.Error())
-			return
-		}
-	case req.SSHHostID != "":
-		if s.sshHosts == nil {
-			writeError(w, http.StatusServiceUnavailable, "ssh_hosts_unavailable", "SSH 主机存储不可用")
-			return
-		}
-		host, err := s.sshHosts.Get(req.SSHHostID)
-		if errors.Is(err, store.ErrSSHHostNotFound) {
-			writeError(w, http.StatusNotFound, "ssh_host_not_found", "找不到所选 SSH 主机")
-			return
-		}
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, "ssh_host_read_failed", "无法读取已保存的 SSH 主机")
-			return
-		}
-		cfg = &host
-	default:
-		cfg = s.savedConnectionSSH(w, req.ConnectionID)
-		if cfg == nil {
-			return
-		}
 	}
 	var token [16]byte
 	if _, err := rand.Read(token[:]); err != nil {
@@ -201,8 +173,12 @@ func (s *Server) handleOpenTerminal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := hex.EncodeToString(token[:])
-	if !s.terminals.reserve(id) {
-		writeError(w, http.StatusTooManyRequests, "terminal_limit", "终端会话已达上限，请先断开其他终端")
+	limit := s.cfg.MaxTerminalSessions
+	if limit <= 0 {
+		limit = config.DefaultMaxTerminalSessions
+	}
+	if !s.terminals.reserve(id, limit) {
+		writeError(w, http.StatusTooManyRequests, "terminal_limit", fmt.Sprintf("终端会话已达上限（%d 个），请先断开其他终端", limit))
 		return
 	}
 	success := false
@@ -211,7 +187,7 @@ func (s *Server) handleOpenTerminal(w http.ResponseWriter, r *http.Request) {
 			s.terminals.close(id, false)
 		}
 	}()
-	terminal, err := ssh.OpenTerminal(r.Context(), ssh.Spec{
+	terminal, err := ssh.OpenTerminalWithEncoding(r.Context(), ssh.Spec{
 		Host:                  cfg.Host,
 		Port:                  cfg.Port,
 		Username:              cfg.Username,
@@ -221,7 +197,7 @@ func (s *Server) handleOpenTerminal(w http.ResponseWriter, r *http.Request) {
 		Passphrase:            cfg.Passphrase,
 		HostKeyFingerprint:    cfg.HostKeyFingerprint,
 		InsecureIgnoreHostKey: cfg.InsecureIgnoreHostKey,
-	}, req.Rows, req.Cols)
+	}, req.Rows, req.Cols, req.Encoding)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "terminal_connect_failed", "无法打开 SSH 终端："+err.Error())
 		return
@@ -270,7 +246,7 @@ func (s *Server) handleTerminalOutput(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.WriteHeader(http.StatusOK)
 	flusher.Flush()
-	buf := make([]byte, 16*1024)
+	buf := make([]byte, terminalOutputChunk)
 	for {
 		n, readErr := terminal.Output.Read(buf)
 		if n > 0 {
@@ -284,6 +260,121 @@ func (s *Server) handleTerminalOutput(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 }
+
+func (s *Server) handleTerminalStream(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		writeError(w, http.StatusMethodNotAllowed, "method_not_allowed", "终端输出需要 GET 请求")
+		return
+	}
+	if !strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
+		w.Header().Set("Upgrade", "websocket")
+		writeError(w, http.StatusUpgradeRequired, "terminal_upgrade_required", "终端输出需要 WebSocket")
+		return
+	}
+	origins := r.Header.Values("Origin")
+	if len(origins) != 1 || origins[0] != "http://"+r.Host {
+		writeError(w, http.StatusForbidden, "invalid_origin", "桌面请求来源无效")
+		return
+	}
+	if _, ok := w.(http.Hijacker); !ok {
+		writeError(w, http.StatusInternalServerError, "terminal_stream_failed", "无法打开终端输出流")
+		return
+	}
+
+	id := routeConnectionID(r)
+	var terminal *ssh.Terminal
+	defer func() {
+		if terminal != nil {
+			s.terminals.close(id, false)
+		}
+	}()
+	server := websocket.Server{
+		Handshake: func(config *websocket.Config, _ *http.Request) error {
+			terminal, _ = s.terminals.attach(id)
+			if terminal == nil {
+				return errors.New("terminal is closed or already attached")
+			}
+			config.Protocol = nil
+			return nil
+		},
+		Handler: func(socket *websocket.Conn) {
+			streamTerminalOutput(socket, terminal)
+		},
+	}
+	server.ServeHTTP(w, r)
+}
+
+func streamTerminalOutput(socket *websocket.Conn, terminal *ssh.Terminal) {
+	// SSH output alone uses WebSocket; input and resize stay on their HTTP
+	// routes. The only accepted data frame acknowledges one rendered chunk.
+	socket.PayloadType = websocket.BinaryFrame
+	socket.MaxPayloadBytes = 1
+	_ = socket.SetWriteDeadline(time.Now().Add(terminalWriteLimit))
+	done := make(chan struct{})
+	defer close(done)
+	defer func() {
+		_ = socket.SetWriteDeadline(time.Now().Add(terminalWriteLimit))
+		_ = socket.Close()
+	}()
+	var awaitingAck atomic.Bool
+	acks := make(chan struct{}, 1)
+	peerClosed := make(chan struct{})
+	go func() {
+		defer close(peerClosed)
+		defer terminal.Close()
+		for {
+			var ack []byte
+			if err := terminalAckCodec.Receive(socket, &ack); err != nil || !awaitingAck.CompareAndSwap(true, false) {
+				return
+			}
+			acks <- struct{}{}
+		}
+	}()
+	go func() {
+		select {
+		case <-socket.Request().Context().Done():
+			_ = socket.SetDeadline(time.Now())
+			terminal.Close()
+		case <-done:
+		}
+	}()
+
+	buf := make([]byte, terminalOutputChunk)
+	for {
+		n, readErr := terminal.Output.Read(buf)
+		if n > 0 {
+			awaitingAck.Store(true)
+			_ = socket.SetWriteDeadline(time.Now().Add(terminalWriteLimit))
+			if _, err := socket.Write(buf[:n]); err != nil {
+				return
+			}
+			timeout := time.NewTimer(terminalAckTimeout)
+			select {
+			case <-acks:
+				timeout.Stop()
+			case <-peerClosed:
+				timeout.Stop()
+				return
+			case <-socket.Request().Context().Done():
+				timeout.Stop()
+				return
+			case <-timeout.C:
+				return
+			}
+		}
+		if readErr != nil {
+			return
+		}
+	}
+}
+
+var terminalAckCodec = websocket.Codec{Unmarshal: func(payload []byte, kind byte, _ any) error {
+	if kind != websocket.BinaryFrame || len(payload) != 1 || payload[0] != 1 {
+		return errors.New("invalid terminal output acknowledgment")
+	}
+	return nil
+}}
 
 func (s *Server) handleTerminalInput(w http.ResponseWriter, r *http.Request) {
 	terminal := s.terminals.active(routeConnectionID(r))
@@ -302,7 +393,14 @@ func (s *Server) handleTerminalInput(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_terminal_input", "无法读取终端输入")
 		return
 	}
-	writeTerminalCommand(w, terminal.Send(data))
+	switch r.Header.Get("X-Zidong-Terminal-Input") {
+	case "", "text":
+		writeTerminalCommand(w, terminal.Send(data))
+	case "binary":
+		writeTerminalCommand(w, terminal.SendRaw(data))
+	default:
+		writeError(w, http.StatusBadRequest, "invalid_terminal_input", "无法识别终端输入类型")
+	}
 }
 
 func (s *Server) handleTerminalResize(w http.ResponseWriter, r *http.Request) {
@@ -335,6 +433,8 @@ func writeTerminalCommand(w http.ResponseWriter, err error) {
 		writeTerminalClosed(w)
 	case errors.Is(err, ssh.ErrTerminalBusy):
 		writeError(w, http.StatusTooManyRequests, "terminal_busy", "终端输入缓冲已满")
+	case errors.Is(err, ssh.ErrTerminalInputEncoding):
+		writeError(w, http.StatusBadRequest, "terminal_input_encoding", err.Error())
 	default:
 		writeError(w, http.StatusBadRequest, "invalid_terminal_command", err.Error())
 	}

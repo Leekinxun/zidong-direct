@@ -4,12 +4,14 @@ const { randomUUID } = require('node:crypto');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { launchBackend, tokenHeader } = require('./backend.cjs');
+const { launchProxiedChrome, closeProxiedChromes } = require('./browser-proxy.cjs');
 const { openPreferences, openWindowsMasterKey } = require('./profile.cjs');
 
 app.setName(app.isPackaged ? 'Zidong Direct' : 'Zidong Direct Dev');
 app.setAppUserModelId('io.github.leekinxun.zidongdirect');
 
 let activeWindow;
+const workbenchWindows = new Map();
 let activeBackend;
 let preferences;
 let quitting = false;
@@ -32,6 +34,11 @@ function isSqliteDownload(url, origin) {
   return url?.protocol === 'http:' && url.origin === origin && url.pathname === '/api/sqlite/download';
 }
 
+function isTerminalStream(url, origin) {
+  return url?.protocol === 'ws:' && `http://${url.host}` === origin
+    && /^\/api\/terminal\/sessions\/[a-f0-9]{32}\/stream$/.test(url.pathname) && !url.search;
+}
+
 function downloadFilename(value) {
   let name = value.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').slice(0, 160).replace(/[ .]+$/g, '');
   if (!name) return 'export';
@@ -45,13 +52,15 @@ function restrictSession(workbenchSession, win, origin, token) {
   workbenchSession.webRequest.onBeforeRequest((details, callback) => {
     const url = parseURL(details.url);
     const allowed = isWorkbenchPage(details.url, origin)
+      || (details.resourceType === 'webSocket' && isTerminalStream(url, origin))
       || (url?.protocol === 'blob:' && url.origin === origin)
       || (url?.protocol === 'data:' && details.resourceType === 'image');
     const otherWindow = details.webContentsId !== undefined && details.webContentsId !== webContentsId;
     callback({ cancel: !allowed || otherWindow });
   });
   workbenchSession.webRequest.onBeforeSendHeaders((details, callback) => {
-    if (isWorkbenchPage(details.url, origin)) {
+    if (isWorkbenchPage(details.url, origin)
+      || (details.resourceType === 'webSocket' && isTerminalStream(parseURL(details.url), origin))) {
       for (const name of Object.keys(details.requestHeaders)) {
         if (name.toLowerCase() === tokenHeader.toLowerCase()) delete details.requestHeaders[name];
       }
@@ -97,17 +106,22 @@ function restrictSession(workbenchSession, win, origin, token) {
   });
 }
 
-async function openWindow(origin, token) {
+async function openWindow(origin, token, terminalOnly = false) {
+  const workspace = activeWindow;
+  if (terminalOnly && (!workspace || workspace.origin !== origin || workspace.token !== token)) {
+    throw new Error('本地工作台尚未就绪');
+  }
   const workbenchSession = session.fromPartition(`zidong-${randomUUID()}`);
   await workbenchSession.setProxy({ mode: 'direct' });
   if (quitting) return;
+  if (terminalOnly && activeWindow !== workspace) throw new Error('本地工作台已关闭');
   const win = new BrowserWindow({
-    title: '紫东直连',
+    title: terminalOnly ? 'SSH 终端 · 紫东直连' : '紫东直连',
     show: false,
-    width: 1240,
-    height: 820,
-    minWidth: 860,
-    minHeight: 580,
+    width: terminalOnly ? 1024 : 1240,
+    height: terminalOnly ? 700 : 820,
+    minWidth: terminalOnly ? 520 : 860,
+    minHeight: terminalOnly ? 400 : 580,
     backgroundColor: '#161618',
     webPreferences: {
       session: workbenchSession,
@@ -119,7 +133,15 @@ async function openWindow(origin, token) {
       devTools: !app.isPackaged,
     },
   });
-  activeWindow = { win, origin };
+  const record = { win, origin, token };
+  const contentsId = win.webContents.id;
+  workbenchWindows.set(contentsId, record);
+  win.once('closed', () => workbenchWindows.delete(contentsId));
+  if (terminalOnly) {
+    win.on('page-title-updated', (event) => event.preventDefault());
+  } else {
+    activeWindow = record;
+  }
   restrictSession(workbenchSession, win, origin, token);
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   const allowNavigation = (event, url) => {
@@ -136,46 +158,94 @@ async function openWindow(origin, token) {
   win.webContents.on('will-redirect', allowNavigation);
   win.webContents.on('will-attach-webview', (event) => event.preventDefault());
   win.webContents.on('before-input-event', (event, input) => {
-    if (input.type === 'keyDown' && input.control && input.shift && !input.alt && !input.meta
-      && !input.isAutoRepeat && input.key.toLowerCase() === 'v') {
+    if (input.type !== 'keyDown' || !input.shift || input.alt || input.isAutoRepeat) return;
+    const key = input.key.toLowerCase();
+    const pasteModifier = (input.control && !input.meta)
+      || (process.platform === 'darwin' && input.meta && !input.control);
+    if (pasteModifier && key === 'v') {
       event.preventDefault();
       win.webContents.paste();
-    }
-  });
-  win.on('close', (event) => {
-    if (!quitReady) {
+    } else if (process.platform === 'darwin' && input.control && !input.meta && key === 'n') {
       event.preventDefault();
-      app.quit();
+      void openTerminalWindowFromMenu();
     }
   });
+  if (!terminalOnly) {
+    win.on('close', (event) => {
+      if (!quitReady) {
+        event.preventDefault();
+        app.quit();
+      }
+    });
+  }
   const rendererGone = new Promise((resolve) => {
-    win.webContents.once('render-process-gone', (_event, { reason }) => resolve(`工作台窗口已退出（${reason}）`));
+    win.webContents.once('render-process-gone', (_event, { reason }) => {
+      if (terminalOnly && !win.isDestroyed()) win.destroy();
+      resolve(`工作台窗口已退出（${reason}）`);
+    });
   });
-  await win.loadURL(origin);
-  if (!quitting) win.show();
+  const url = new URL('/', origin);
+  if (terminalOnly) url.searchParams.set('workspace', 'terminal');
+  try {
+    await win.loadURL(url.href);
+    if (!quitting && !win.isDestroyed()) win.show();
+  } catch (error) {
+    if (!win.isDestroyed()) win.destroy();
+    throw error;
+  }
   return { rendererGone };
 }
 
-function registerPreferences() {
+async function openTerminalWindow() {
+  if (quitting) return;
+  if (!activeWindow || activeWindow.win.isDestroyed()) throw new Error('本地工作台尚未就绪');
+  const { origin, token } = activeWindow;
+  await openWindow(origin, token, true);
+}
+
+async function openTerminalWindowFromMenu() {
+  try {
+    await openTerminalWindow();
+  } catch (error) {
+    if (!quitting) dialog.showErrorBox('无法打开 SSH 终端窗口', error.message);
+  }
+}
+
+function registerWorkbenchHandlers() {
   function fromWorkbench(handler) {
     return (event, value) => {
       const frame = event.senderFrame;
-      if (quitting || !activeWindow || !frame || event.sender !== activeWindow.win.webContents
-        || frame !== event.sender.mainFrame || !isWorkbenchPage(frame.url, activeWindow.origin)) {
+      const workspace = workbenchWindows.get(event.sender.id);
+      if (quitting || !activeWindow || !workspace || workspace.origin !== activeWindow.origin
+        || workspace.token !== activeWindow.token || !frame || event.sender !== workspace.win.webContents
+        || frame !== event.sender.mainFrame || !isWorkbenchPage(frame.url, workspace.origin)) {
         throw new Error('请求来源无效');
       }
-      return handler(value);
+      return handler(value, workspace);
     };
   }
   ipcMain.handle('preferences:get', fromWorkbench(() => preferences.get()));
   ipcMain.handle('preferences:sidebar-width', fromWorkbench((width) => preferences.setSidebarWidth(width)));
   ipcMain.handle('preferences:sql-history', fromWorkbench((history) => preferences.setSqlHistory(history)));
+  ipcMain.handle('preferences:font-size', fromWorkbench(({ preference, size } = {}) => preferences.setFontSize(preference, size)));
+  ipcMain.handle('terminal:open-window', fromWorkbench(openTerminalWindow));
+  ipcMain.handle('terminal:paste', fromWorkbench((_value, { win }) => {
+    if (!win.isFocused()) throw new Error('请先聚焦终端窗口');
+    win.webContents.paste();
+  }));
+  ipcMain.handle('terminal:open-proxied-chrome', fromWorkbench((request, { origin, token }) =>
+    launchProxiedChrome({ request, origin, token }),
+  ));
 }
 
 function setMenu() {
-  const fileItems = [];
+  const fileItems = [{
+    label: '新终端窗口',
+    accelerator: 'CommandOrControl+Shift+N',
+    click: () => void openTerminalWindowFromMenu(),
+  }];
   if (process.platform === 'win32' && app.isPackaged) {
-    fileItems.push({
+    fileItems.push({ type: 'separator' }, {
       label: '打开卸载面板…',
       click: () => {
         const controlPanel = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'control.exe');
@@ -183,9 +253,9 @@ function setMenu() {
           if (error) dialog.showErrorBox('无法打开卸载面板', '请从 Windows 控制面板的“程序和功能”卸载紫东直连。');
         });
       },
-    }, { type: 'separator' });
+    });
   }
-  fileItems.push({ label: '退出', role: 'quit' });
+  fileItems.push({ type: 'separator' }, { label: '退出', role: 'quit' });
   const editingItems = [
     { label: '撤销', role: 'undo' },
     { label: '重做', role: 'redo' },
@@ -214,7 +284,7 @@ function setMenu() {
 
 async function runWorkbench() {
   setMenu();
-  registerPreferences();
+  registerWorkbenchHandlers();
   const profileDir = path.join(app.getPath('userData'), 'workspace');
   const dataDir = path.join(profileDir, 'data');
   const extension = process.platform === 'win32' ? '.exe' : '';
@@ -246,8 +316,11 @@ async function runWorkbench() {
     }
 
     if (quitting) return;
-    activeWindow?.win.destroy();
     activeWindow = undefined;
+    for (const { win } of workbenchWindows.values()) {
+      if (!win.isDestroyed()) win.destroy();
+    }
+    await closeProxiedChromes();
     await activeBackend?.stop();
     activeBackend = undefined;
     if (quitting) return;
@@ -278,7 +351,10 @@ if (!app.requestSingleInstanceLock()) {
     event.preventDefault();
     if (quitting) return;
     quitting = true;
-    Promise.allSettled([activeBackend?.stop(), preferences?.flush()]).then(() => {
+    Promise.allSettled([
+      closeProxiedChromes().finally(() => activeBackend?.stop()),
+      preferences?.flush(),
+    ]).then(() => {
       quitReady = true;
       app.quit();
     });

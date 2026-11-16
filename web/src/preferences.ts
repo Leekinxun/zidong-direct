@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react';
+import type { TerminalTarget } from './components/TerminalSession';
 
 interface SqlHistoryItem {
   sql: string;
@@ -10,7 +11,11 @@ interface SqlHistoryItem {
 interface DesktopPreferences {
   sidebarWidth?: number;
   sqlHistory?: SqlHistoryItem[];
+  databaseFontSize?: number;
+  terminalFontSize?: number;
 }
+
+type FontSizePreference = 'databaseFontSize' | 'terminalFontSize';
 
 declare global {
   interface Window {
@@ -18,6 +23,10 @@ declare global {
       getPreferences(): Promise<DesktopPreferences>;
       setSidebarWidth(width: number): Promise<void>;
       setSqlHistory(history: SqlHistoryItem[]): Promise<void>;
+      setFontSize(preference: FontSizePreference, size: number): Promise<void>;
+      openTerminalWindow(): Promise<void>;
+      pasteTerminal(): Promise<void>;
+      openProxiedChrome(request: { target: TerminalTarget; url?: string }): Promise<void>;
     };
   }
 }
@@ -30,11 +39,36 @@ const SQL_HISTORY_KEY = 'webdb_sql_history_v1';
 const MAX_HISTORY_ENTRIES = 30;
 const MAX_DESKTOP_HISTORY_BYTES = 2 * 1024 * 1024;
 const EMPTY_SQL_HISTORY: SqlHistoryItem[] = [];
+const FONT_SIZE_DEFAULT = 14;
+const FONT_SIZE_MIN = 10;
+const FONT_SIZE_MAX = 32;
 
 let desktopSidebarWidth: number | undefined;
 let cachedHistory = EMPTY_SQL_HISTORY;
 let cachedWebHistoryJson: string | null | undefined;
 const historyListeners = new Set<() => void>();
+const fontSizeListeners = new Set<() => void>();
+
+function validFontSize(value: number | undefined): value is number {
+  return value !== undefined && Number.isInteger(value) && value >= FONT_SIZE_MIN && value <= FONT_SIZE_MAX;
+}
+
+function loadWebFontSize(preference: FontSizePreference) {
+  if (!isDesktop) {
+    try {
+      const value = Number(localStorage.getItem(`zd_${preference}`));
+      if (validFontSize(value)) return value;
+    } catch {
+      // localStorage is optional.
+    }
+  }
+  return FONT_SIZE_DEFAULT;
+}
+
+const fontSizes: Record<FontSizePreference, number> = {
+  databaseFontSize: loadWebFontSize('databaseFontSize'),
+  terminalFontSize: loadWebFontSize('terminalFontSize'),
+};
 
 export async function loadDesktopPreferences(): Promise<void> {
   try {
@@ -42,10 +76,38 @@ export async function loadDesktopPreferences(): Promise<void> {
     const preferences = await window.zidongDesktop.getPreferences();
     desktopSidebarWidth = preferences.sidebarWidth;
     cachedHistory = preferences.sqlHistory ?? EMPTY_SQL_HISTORY;
+    if (validFontSize(preferences.databaseFontSize)) fontSizes.databaseFontSize = preferences.databaseFontSize;
+    if (validFontSize(preferences.terminalFontSize)) fontSizes.terminalFontSize = preferences.terminalFontSize;
   } catch {
     console.warn('无法读取桌面首选项');
   }
 }
+
+export function subscribeToFontSize(listener: () => void) {
+  fontSizeListeners.add(listener);
+  return () => { fontSizeListeners.delete(listener); };
+}
+
+function adjustFontSize(preference: FontSizePreference, step: number) {
+  const size = Math.min(FONT_SIZE_MAX, Math.max(FONT_SIZE_MIN, fontSizes[preference] + step));
+  if (size === fontSizes[preference]) return;
+  fontSizes[preference] = size;
+  if (isDesktop) {
+    window.zidongDesktop?.setFontSize(preference, size).catch(() => console.warn('无法保存桌面字体大小'));
+  } else {
+    try {
+      localStorage.setItem(`zd_${preference}`, String(size));
+    } catch {
+      // localStorage is optional.
+    }
+  }
+  fontSizeListeners.forEach((listener) => listener());
+}
+
+export const readDatabaseFontSize = () => fontSizes.databaseFontSize;
+export const readTerminalFontSize = () => fontSizes.terminalFontSize;
+export const adjustDatabaseFontSize = (step: number) => adjustFontSize('databaseFontSize', step);
+export const adjustTerminalFontSize = (step: number) => adjustFontSize('terminalFontSize', step);
 
 export function readSidebarWidth(): number {
   let saved: number | undefined;

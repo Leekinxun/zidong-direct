@@ -36,6 +36,10 @@ function validWidth(value) {
   return Number.isInteger(value) && value >= 220 && value <= 680;
 }
 
+function validFontSize(value) {
+  return Number.isInteger(value) && value >= 10 && value <= 32;
+}
+
 function validateHistory(value) {
   if (!Array.isArray(value) || value.length > 30) {
     throw new TypeError('查询历史格式无效');
@@ -61,6 +65,8 @@ async function openPreferences(profileDir) {
     try {
       const previous = JSON.parse(raw);
       if (validWidth(previous?.sidebarWidth)) preferences.sidebarWidth = previous.sidebarWidth;
+      if (validFontSize(previous?.databaseFontSize)) preferences.databaseFontSize = previous.databaseFontSize;
+      if (validFontSize(previous?.terminalFontSize)) preferences.terminalFontSize = previous.terminalFontSize;
       if (previous?.sqlHistory !== undefined) preferences.sqlHistory = validateHistory(previous.sqlHistory);
     } catch {
       // The workbench can start with default preferences if this file is damaged.
@@ -86,6 +92,12 @@ async function openPreferences(profileDir) {
       return update({ sidebarWidth: width });
     },
     setSqlHistory: (history) => update({ sqlHistory: validateHistory(history) }),
+    setFontSize: (preference, size) => {
+      if ((preference !== 'databaseFontSize' && preference !== 'terminalFontSize') || !validFontSize(size)) {
+        throw new RangeError('字体设置无效');
+      }
+      return update({ [preference]: size });
+    },
   };
 }
 
